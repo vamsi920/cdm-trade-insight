@@ -1,4 +1,5 @@
 import { Trade } from '@/types/trade';
+import { additionalIRSwaps } from './additionalTrades';
 
 export const mockTrades: Trade[] = [
   {
@@ -21,6 +22,7 @@ export const mockTrades: Trade[] = [
         notionalValue: 50000000,
         currency: 'USD',
         changes: ['Trade initiated', 'Fixed rate: 3.25%', 'Floating: SOFR + 50bps'],
+        narrative: 'Trade TRD-2024-001 was executed on January 15, 2024, establishing an Interest Rate Swap with a notional principal of $50 million. Bank of America agreed to pay a fixed rate of 3.25% while receiving SOFR + 50 basis points from ABC Capital Partners. This swap has a 5-year tenor with quarterly settlement periods. The trade documentation follows standard ISDA Master Agreement terms with a Credit Support Annex requiring bilateral collateralization. Initial margin was posted by both parties in accordance with regulatory requirements.',
       },
       {
         id: 'evt-002',
@@ -29,6 +31,7 @@ export const mockTrades: Trade[] = [
         description: 'Trade confirmation received',
         party: 'ABC Capital Partners',
         changes: ['Confirmation sent', 'Terms agreed'],
+        narrative: 'Electronic trade confirmation was received on January 16, 2024, one business day after execution. ABC Capital Partners confirmed all economic terms including the $50M notional, 3.25% fixed rate, SOFR + 50bps floating leg, and quarterly payment schedule. The confirmation matched Bank of America\'s internal booking records with no discrepancies. Both parties\' middle office systems reconciled successfully, and the trade received final approval from credit risk management.',
       },
       {
         id: 'evt-003',
@@ -39,6 +42,7 @@ export const mockTrades: Trade[] = [
         notionalValue: 45000000,
         currency: 'USD',
         changes: ['Notional reduced to $45M', 'Amendment effective immediately'],
+        narrative: 'On June 20, 2024, both parties executed a bilateral amendment reducing the notional principal from $50M to $45M, effective immediately. This $5M reduction was initiated by Bank of America to align with a corresponding reduction in the underlying loan portfolio being hedged. The amendment maintained all other economic terms including the fixed rate of 3.25% and the floating rate of SOFR + 50bps. No termination payment was required as the adjustment was pro-rata. Updated collateral requirements were calculated and adjusted accordingly within the two-day settlement period.',
       },
       {
         id: 'evt-004',
@@ -47,6 +51,7 @@ export const mockTrades: Trade[] = [
         description: 'Mid-year settlement',
         party: 'Bank of America',
         changes: ['Net settlement: $125,000', 'Payment complete'],
+        narrative: 'Quarterly settlement was processed on July 15, 2024, covering the period from April 15 to July 15, 2024. Bank of America paid the fixed leg amount of $365,625 (3.25% on $45M for 91 days), while ABC Capital Partners paid the floating leg of $490,625 (calculated on 91-day SOFR averaging 4.35% + 50bps on $45M notional). The net settlement of $125,000 was paid by ABC Capital Partners to Bank of America. Payment was made via wire transfer and received same-day, with automated reconciliation confirming successful settlement.',
       },
     ],
     narrative: {
@@ -135,4 +140,5 @@ export const mockTrades: Trade[] = [
       counterparty: 'International Corp uses this forward to hedge anticipated EUR receipts from European operations. The August extension aligned with revised timing of underlying commercial transactions. The hedge remains effective in managing FX exposure.',
     },
   },
+  ...additionalIRSwaps,
 ];

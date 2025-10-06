@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { TradeEvent } from '@/types/trade';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { 
   PlayCircle, 
   Edit3, 
@@ -15,6 +21,8 @@ import {
 
 interface TradeTimelineProps {
   events: TradeEvent[];
+  onEventClick?: (event: TradeEvent) => void;
+  selectedEventId?: string | null;
 }
 
 const eventIcons = {
@@ -35,38 +43,59 @@ const eventColors = {
   Settlement: 'text-orange-600',
 };
 
-export const TradeTimeline = ({ events }: TradeTimelineProps) => {
+export const TradeTimeline = ({ events, onEventClick, selectedEventId }: TradeTimelineProps) => {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
-  const toggleExpand = (eventId: string) => {
-    setExpandedEventId(expandedEventId === eventId ? null : eventId);
+  const handleEventClick = (event: TradeEvent) => {
+    setExpandedEventId(expandedEventId === event.id ? null : event.id);
+    if (onEventClick) {
+      onEventClick(event);
+    }
   };
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-foreground">Trade Lifecycle</h2>
-      
-      <div className="relative">
-        {/* Timeline line */}
-        <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-border" />
+    <TooltipProvider>
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-foreground">Trade Lifecycle</h2>
         
-        <div className="space-y-6">
-          {events.map((event, index) => {
-            const Icon = eventIcons[event.type];
-            const isExpanded = expandedEventId === event.id;
-            const isLast = index === events.length - 1;
+        <div className="relative">
+          {/* Timeline line */}
+          <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-border" />
+          
+          <div className="space-y-6">
+            {events.map((event, index) => {
+              const Icon = eventIcons[event.type];
+              const isExpanded = expandedEventId === event.id;
+              const isSelected = selectedEventId === event.id;
 
-            return (
-              <div key={event.id} className="relative">
-                {/* Timeline dot */}
-                <div className={`absolute left-4 w-4 h-4 rounded-full bg-card border-2 ${
-                  eventColors[event.type].replace('text-', 'border-')
-                } z-10`} />
-                
-                <Card 
-                  className="ml-12 p-4 cursor-pointer hover-lift fast-transition"
-                  onClick={() => toggleExpand(event.id)}
-                >
+              return (
+                <div key={event.id} className="relative">
+                  {/* Timeline dot */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className={`absolute left-4 w-4 h-4 rounded-full cursor-pointer transition-all duration-300 border-2 z-10 ${
+                          isSelected 
+                            ? `${eventColors[event.type].replace('text-', 'border-')} scale-150 shadow-lg` 
+                            : `${eventColors[event.type].replace('text-', 'border-')} bg-card hover:scale-125`
+                        }`} 
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-xs">
+                      <p className="font-semibold mb-1">{event.type} - {event.id}</p>
+                      <p className="text-xs text-muted-foreground">{event.description}</p>
+                      {event.narrative && (
+                        <p className="text-xs mt-2 line-clamp-3">{event.narrative.slice(0, 150)}...</p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Card 
+                    className={`ml-12 p-4 cursor-pointer hover-lift fast-transition ${
+                      isSelected ? 'border-primary border-2 shadow-lg' : ''
+                    }`}
+                    onClick={() => handleEventClick(event)}
+                  >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
                       <Icon className={`w-5 h-5 mt-0.5 ${eventColors[event.type]}`} />
@@ -124,10 +153,11 @@ export const TradeTimeline = ({ events }: TradeTimelineProps) => {
                   </div>
                 </Card>
               </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageSquare, X, Minimize2, Maximize2, Send, Pin, PinOff } from 'lucide-react';
+import { Trade } from '@/types/trade';
 
 interface Message {
   id: string;
@@ -12,7 +13,11 @@ interface Message {
   timestamp: Date;
 }
 
-export const ChatAssistant = () => {
+interface ChatAssistantProps {
+  trade?: Trade;
+}
+
+export const ChatAssistant = ({ trade }: ChatAssistantProps) => {
   const [isOpen, setIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isPinned, setIsPinned] = useState(true);
@@ -20,7 +25,9 @@ export const ChatAssistant = () => {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your trade analytics assistant. Ask me anything about the selected trade, its lifecycle, or specific events.',
+      content: trade 
+        ? `Hello! I'm your assistant for trade ${trade.id}. I can help you understand this ${trade.productType} trade, analyze its lifecycle events, explain settlement details, or answer questions about the ${trade.counterparty} relationship. What would you like to know?`
+        : 'Hello! I\'m your trade analytics assistant. Select a trade to get started, and I\'ll help you understand its lifecycle, events, and more.',
       timestamp: new Date(),
     },
   ]);
@@ -43,7 +50,9 @@ export const ChatAssistant = () => {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'This is a demo response. In production, this would connect to an AI service to analyze trade data and provide insights based on your question.',
+        content: trade 
+          ? `This is a demo response for trade ${trade.id}. In production, I would analyze the specific details of this ${trade.productType} trade, including its ${trade.events.length} lifecycle events, current ${new Intl.NumberFormat('en-US', { style: 'currency', currency: trade.currency, notation: 'compact' }).format(trade.currentNotional)} notional, and relationship with ${trade.counterparty} to answer your question: "${inputValue}"`
+          : 'Please select a trade first to ask specific questions about it. I can provide detailed insights once a trade is selected.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -73,7 +82,12 @@ export const ChatAssistant = () => {
       <div className="flex items-center justify-between p-4 border-b border-border bg-accent">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Trade Assistant</h3>
+          <div>
+            <h3 className="font-semibold text-foreground">Trade Assistant</h3>
+            {trade && (
+              <p className="text-xs text-muted-foreground">{trade.id}</p>
+            )}
+          </div>
         </div>
         
         <div className="flex items-center gap-1">
@@ -141,7 +155,8 @@ export const ChatAssistant = () => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Ask about this trade..."
+                placeholder={trade ? `Ask about ${trade.id}...` : "Select a trade first..."}
+                disabled={!trade}
                 className="flex-1 bg-card border-input"
               />
               <Button

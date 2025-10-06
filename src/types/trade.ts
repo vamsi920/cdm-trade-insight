@@ -18,6 +18,7 @@ export interface TradeEvent {
   currency?: string;
   changes?: string[];
   metadata?: Record<string, any>;
+  narrative?: string; // Full narrative for this specific event
 }
 
 export interface Trade {
