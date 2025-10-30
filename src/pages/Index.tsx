@@ -1,79 +1,521 @@
-import { useState } from 'react';
-import { mockTrades } from '@/data/mockTrades';
-import { TradeSelector } from '@/components/TradeSelector';
-import { TradeTimeline } from '@/components/TradeTimeline';
-import { NarrativeSummary } from '@/components/NarrativeSummary';
-import { ChatAssistant } from '@/components/ChatAssistant';
-import { TrendingUp } from 'lucide-react';
+import { useState } from "react";
+import { mockTrades } from "@/data/mockTrades";
+import { TradeSelector } from "@/components/TradeSelector";
+import { TradeTimeline } from "@/components/TradeTimeline";
+import { NarrativeSummary } from "@/components/NarrativeSummary";
+import { ChatAssistant } from "@/components/ChatAssistant";
+import { TrendingUp, ArrowLeft } from "lucide-react";
+import { TradeEvent } from "@/types/trade";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { mockCDMOutputs, mockDRRReports } from "@/data/cdmOutputs";
 
 const Index = () => {
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<TradeEvent | null>(null);
 
-  const selectedTrade = mockTrades.find(trade => trade.id === selectedTradeId);
+  const selectedTrade = mockTrades.find(
+    (trade) => trade.id === selectedTradeId
+  );
+
+  const handleEventClick = (event: TradeEvent) => {
+    setSelectedEvent(event);
+  };
+
+  const clearSelectedEvent = () => {
+    setSelectedEvent(null);
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card shadow-sm sticky top-0 z-40">
-        <div className="container mx-auto px-6 py-4">
+    <div className="min-h-screen bg-background flex">
+      {/* Left Sidebar - Trade Selector */}
+      <aside className="w-80 border-r border-border bg-card/50 flex flex-col">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => (window.location.href = "/")}
+              className="hover:bg-accent"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">CDM Trade Analytics</h1>
-              <p className="text-sm text-muted-foreground">Bank of America Trading Platform</p>
+              <h1 className="text-xl font-bold text-foreground">
+                CDM Trade Analytics
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Trade Analytics Platform
+              </p>
             </div>
           </div>
         </div>
-      </header>
+        <div className="flex-1 overflow-auto">
+          <TradeSelector
+            trades={mockTrades}
+            selectedTradeId={selectedTradeId}
+            onSelectTrade={setSelectedTradeId}
+          />
+          {selectedTrade && (
+            <div className="p-4 border-t border-border">
+              <TradeTimeline
+                events={selectedTrade.events}
+                onEventClick={handleEventClick}
+                selectedEventId={selectedEvent?.id || null}
+                compact={true}
+              />
+            </div>
+          )}
+        </div>
+      </aside>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Left Sidebar - Trade Selector */}
-          <aside className="col-span-12 lg:col-span-3">
-            <TradeSelector
-              trades={mockTrades}
-              selectedTradeId={selectedTradeId}
-              onSelectTrade={setSelectedTradeId}
-            />
-          </aside>
-
-          {/* Main Content Area */}
-          <div className="col-span-12 lg:col-span-9">
-            {selectedTrade ? (
-              <div className="space-y-6">
-                {/* Narrative Summary */}
-                <NarrativeSummary trade={selectedTrade} />
-
-                {/* Timeline */}
-                <TradeTimeline events={selectedTrade.events} />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-[600px]">
-                <div className="text-center space-y-4">
-                  <div className="w-20 h-20 bg-accent rounded-full flex items-center justify-center mx-auto">
-                    <TrendingUp className="w-10 h-10 text-primary" />
-                  </div>
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col">
+        {selectedTrade ? (
+          <div className="flex-1 flex">
+            {/* Main Content */}
+            <div className="flex-1 p-6 overflow-auto">
+              {selectedEvent && (
+                <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-2xl font-semibold text-foreground mb-2">
-                      Select a Trade
+                    <h2 className="text-2xl font-bold text-foreground">
+                      {selectedEvent.type} Event
                     </h2>
-                    <p className="text-muted-foreground max-w-md">
-                      Choose a trade from the left panel to view its complete lifecycle,
-                      narrative summary, and interact with the AI assistant.
+                    <p className="text-muted-foreground">
+                      {selectedEvent.description} •{" "}
+                      {new Date(selectedEvent.date).toLocaleDateString()}
                     </p>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearSelectedEvent}
+                    className="gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear Selection
+                  </Button>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
+              )}
 
-      {/* Chat Assistant */}
-      <ChatAssistant />
+              {selectedEvent ? (
+                <div className="space-y-6">
+                  {/* Event Content Tabs */}
+                  <Tabs defaultValue="narrative" className="space-y-6">
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="narrative">Narrative</TabsTrigger>
+                      <TabsTrigger value="cdm">CDM Output</TabsTrigger>
+                      <TabsTrigger value="drr">DRR Report</TabsTrigger>
+                      <TabsTrigger value="technical">Technical</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="narrative" className="space-y-4">
+                      <Card className="p-6">
+                        <h4 className="text-lg font-semibold mb-4">
+                          Event Narrative
+                        </h4>
+                        <p className="text-foreground leading-relaxed">
+                          {selectedEvent.narrative ||
+                            "No detailed narrative available for this event."}
+                        </p>
+                        {selectedEvent.changes && (
+                          <div className="mt-6">
+                            <h5 className="font-semibold mb-3">Key Changes:</h5>
+                            <ul className="space-y-2">
+                              {selectedEvent.changes.map((change, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex items-start gap-2"
+                                >
+                                  <span className="text-primary mt-1">•</span>
+                                  <span>{change}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="cdm" className="space-y-4">
+                      <Card className="p-6">
+                        <h4 className="text-lg font-semibold mb-4">
+                          CDM Output
+                        </h4>
+                        {(() => {
+                          const cdmOutput = mockCDMOutputs.find(
+                            (c) => c.eventId === selectedEvent.id
+                          );
+                          if (!cdmOutput) {
+                            return (
+                              <p className="text-muted-foreground">
+                                No CDM output available for this event.
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="font-medium">
+                                    CDM Version:
+                                  </span>{" "}
+                                  {cdmOutput.cdmVersion}
+                                </div>
+                                <div>
+                                  <span className="font-medium">
+                                    Event Type:
+                                  </span>{" "}
+                                  {cdmOutput.businessEvent.eventType}
+                                </div>
+                                <div>
+                                  <span className="font-medium">
+                                    Product Type:
+                                  </span>{" "}
+                                  {cdmOutput.tradableProduct.productType}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Notional:</span>{" "}
+                                  {new Intl.NumberFormat("en-US", {
+                                    style: "currency",
+                                    currency:
+                                      cdmOutput.tradableProduct.economicTerms
+                                        .notional.currency,
+                                  }).format(
+                                    cdmOutput.tradableProduct.economicTerms
+                                      .notional.amount
+                                  )}
+                                </div>
+                              </div>
+                              <div className="bg-muted/50 p-4 rounded-lg">
+                                <pre className="text-xs overflow-auto">
+                                  {JSON.stringify(cdmOutput, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="drr" className="space-y-4">
+                      <Card className="p-6">
+                        <h4 className="text-lg font-semibold mb-4">
+                          DRR Report
+                        </h4>
+                        {(() => {
+                          const drrReport = mockDRRReports.find(
+                            (r) => r.eventId === selectedEvent.id
+                          );
+                          if (!drrReport) {
+                            return (
+                              <p className="text-muted-foreground">
+                                No DRR report available for this event.
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="space-y-6">
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                  <h5 className="font-semibold">
+                                    Report Details
+                                  </h5>
+                                  <div className="text-sm space-y-1">
+                                    <div>
+                                      <span className="font-medium">Type:</span>{" "}
+                                      {drrReport.reportType}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Status:
+                                      </span>{" "}
+                                      {drrReport.reportingStatus}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Jurisdiction:
+                                      </span>{" "}
+                                      {drrReport.jurisdiction}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <h5 className="font-semibold">Validation</h5>
+                                  <div className="text-sm space-y-1">
+                                    <div>
+                                      <span className="font-medium">
+                                        Status:
+                                      </span>
+                                      <span
+                                        className={`ml-2 px-2 py-1 rounded text-xs ${
+                                          drrReport.validationResults.status ===
+                                          "PASS"
+                                            ? "bg-green-100 text-green-800"
+                                            : drrReport.validationResults
+                                                .status === "FAIL"
+                                            ? "bg-red-100 text-red-800"
+                                            : "bg-yellow-100 text-yellow-800"
+                                        }`}
+                                      >
+                                        {drrReport.validationResults.status}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Errors:
+                                      </span>{" "}
+                                      {
+                                        drrReport.validationResults.errors
+                                          .length
+                                      }
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Warnings:
+                                      </span>{" "}
+                                      {
+                                        drrReport.validationResults.warnings
+                                          .length
+                                      }
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <h5 className="font-semibold">Submission</h5>
+                                  <div className="text-sm space-y-1">
+                                    <div>
+                                      <span className="font-medium">
+                                        Message ID:
+                                      </span>{" "}
+                                      {drrReport.submissionDetails.messageId}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Status:
+                                      </span>{" "}
+                                      {
+                                        drrReport.submissionDetails
+                                          .acknowledgmentStatus
+                                      }
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="bg-muted/50 p-4 rounded-lg">
+                                <h5 className="font-semibold mb-2">
+                                  Report Fields
+                                </h5>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="font-medium">UTI:</span>{" "}
+                                    {drrReport.reportFields.uti}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">UPI:</span>{" "}
+                                    {drrReport.reportFields.upi || "N/A"}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">
+                                      Notional:
+                                    </span>{" "}
+                                    {new Intl.NumberFormat("en-US", {
+                                      style: "currency",
+                                      currency:
+                                        drrReport.reportFields.notionalCurrency,
+                                    }).format(
+                                      drrReport.reportFields.notionalAmount
+                                    )}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">
+                                      Collateralization:
+                                    </span>{" "}
+                                    {drrReport.reportFields.collateralization}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="technical" className="space-y-4">
+                      <Card className="p-6">
+                        <h4 className="text-lg font-semibold mb-4">
+                          Technical Details
+                        </h4>
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <h5 className="font-semibold">Event Metadata</h5>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium">Event ID:</span>{" "}
+                                {selectedEvent.id}
+                              </div>
+                              <div>
+                                <span className="font-medium">Type:</span>{" "}
+                                {selectedEvent.type}
+                              </div>
+                              <div>
+                                <span className="font-medium">Date:</span>{" "}
+                                {selectedEvent.date}
+                              </div>
+                              <div>
+                                <span className="font-medium">Party:</span>{" "}
+                                {selectedEvent.party}
+                              </div>
+                              {selectedEvent.notionalValue && (
+                                <div>
+                                  <span className="font-medium">Notional:</span>{" "}
+                                  {new Intl.NumberFormat("en-US", {
+                                    style: "currency",
+                                    currency: selectedEvent.currency || "USD",
+                                  }).format(selectedEvent.notionalValue)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <h5 className="font-semibold">Processing Info</h5>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium">
+                                  Processing Status:
+                                </span>{" "}
+                                Completed
+                              </div>
+                              <div>
+                                <span className="font-medium">Validation:</span>{" "}
+                                Passed
+                              </div>
+                              <div>
+                                <span className="font-medium">
+                                  Booking Status:
+                                </span>{" "}
+                                Booked
+                              </div>
+                              <div>
+                                <span className="font-medium">
+                                  Reporting Status:
+                                </span>{" "}
+                                Submitted
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <NarrativeSummary trade={selectedTrade} />
+                  <Card className="p-6">
+                    <h3 className="text-lg font-semibold mb-4">
+                      Trade Overview
+                    </h3>
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-muted-foreground">
+                          Product Details
+                        </h4>
+                        <div className="space-y-1 text-sm">
+                          <div>
+                            <span className="font-medium">Type:</span>{" "}
+                            {selectedTrade.productType}
+                          </div>
+                          <div>
+                            <span className="font-medium">Status:</span>{" "}
+                            {selectedTrade.status}
+                          </div>
+                          <div>
+                            <span className="font-medium">Currency:</span>{" "}
+                            {selectedTrade.currency}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-muted-foreground">
+                          Parties
+                        </h4>
+                        <div className="space-y-1 text-sm">
+                          <div>
+                            <span className="font-medium">Bank:</span>{" "}
+                            {selectedTrade.bank}
+                          </div>
+                          <div>
+                            <span className="font-medium">Counterparty:</span>{" "}
+                            {selectedTrade.counterparty}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-muted-foreground">
+                          Financial
+                        </h4>
+                        <div className="space-y-1 text-sm">
+                          <div>
+                            <span className="font-medium">
+                              Current Notional:
+                            </span>{" "}
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: selectedTrade.currency,
+                            }).format(selectedTrade.currentNotional)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Start Date:</span>{" "}
+                            {new Date(
+                              selectedTrade.startDate
+                            ).toLocaleDateString()}
+                          </div>
+                          <div>
+                            <span className="font-medium">Maturity:</span>{" "}
+                            {new Date(
+                              selectedTrade.maturityDate
+                            ).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              )}
+            </div>
+
+            {/* Right Sidebar - Chat Assistant */}
+            <aside className="w-96 border-l border-border bg-card/30">
+              <ChatAssistant trade={selectedTrade} embedded={true} />
+            </aside>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 bg-accent rounded-full flex items-center justify-center mx-auto">
+                <TrendingUp className="w-10 h-10 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold text-foreground mb-2">
+                  Select a Trade
+                </h2>
+                <p className="text-muted-foreground max-w-md">
+                  Choose a trade from the left panel to view its complete
+                  lifecycle, narrative summary, and interact with the AI
+                  assistant.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
