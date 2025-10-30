@@ -1,21 +1,38 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { mockTrades } from "@/data/mockTrades";
+import { useQuery } from "@tanstack/react-query";
 import { TradeTimeline } from "@/components/TradeTimeline";
 import { NarrativeSummary } from "@/components/NarrativeSummary";
 import { ChatAssistant } from "@/components/ChatAssistant";
-import { TrendingUp, ArrowLeft, X } from "lucide-react";
+import { TrendingUp, ArrowLeft, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TradeEvent } from "@/types/trade";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { mockCDMOutputs, mockDRRReports } from "@/data/cdmOutputs";
+import { api } from "@/lib/api";
 
 const TradeDetail = () => {
   const { tradeId } = useParams<{ tradeId: string }>();
   const navigate = useNavigate();
   const [selectedEvent, setSelectedEvent] = useState<TradeEvent | null>(null);
-  const trade = mockTrades.find((t) => t.id === tradeId);
+
+  // Fetch trade details
+  const { data: trade, isLoading, error } = useQuery({
+    queryKey: ["trade", tradeId],
+    queryFn: () => api.getTrade(tradeId!),
+    enabled: !!tradeId,
+    staleTime: 30000,
+  });
+
+  // Fetch CDM output for selected event
+  const { data: cdmOutput } = useQuery({
+    queryKey: ["trade-state", tradeId, selectedEvent?.metadata?.trade_state_id],
+    queryFn: () => {
+      if (!selectedEvent?.metadata?.trade_state_id) return null;
+      return api.getTradeState(tradeId!, selectedEvent.metadata.trade_state_id);
+    },
+    enabled: !!tradeId && !!selectedEvent?.metadata?.trade_state_id,
+  });
 
   const handleEventClick = (event: TradeEvent) => {
     if (selectedEvent?.id === event.id) {
@@ -26,7 +43,15 @@ const TradeDetail = () => {
     }
   };
 
-  if (!trade) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !trade) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -147,47 +172,48 @@ const TradeDetail = () => {
                   <Card className="p-6">
                     <h4 className="text-lg font-semibold mb-4">CDM Output</h4>
                     {(() => {
-                      const cdmOutput = mockCDMOutputs.find(
-                        (c) => c.eventId === selectedEvent.id
-                      );
-                      if (!cdmOutput) {
+                      if (!cdmOutput?.payload) {
                         return (
                           <p className="text-muted-foreground">
-                            No CDM output available for this event.
+                            {cdmOutput === undefined ? "Loading..." : "No CDM output available for this event."}
                           </p>
                         );
                       }
+                      const payload = cdmOutput.payload;
+                      // Extract data from CDM payload
+                      const tradeState = payload.tradeState || payload.trade_state || payload;
+                      const trade_obj = tradeState.trade || {};
+                      const tradableProduct = trade_obj.tradableProduct || {};
+                      const product = tradableProduct.product || {};
+                      
                       return (
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              <span className="font-medium">CDM Version:</span>{" "}
-                              {cdmOutput.cdmVersion}
+                              <span className="font-medium">Trade State ID:</span>{" "}
+                              {selectedEvent?.metadata?.trade_state_id || "N/A"}
                             </div>
                             <div>
                               <span className="font-medium">Event Type:</span>{" "}
-                              {cdmOutput.businessEvent.eventType}
+                              {selectedEvent?.type || "N/A"}
                             </div>
                             <div>
                               <span className="font-medium">Product Type:</span>{" "}
-                              {cdmOutput.tradableProduct.productType}
+                              {product.productType?.value || "N/A"}
                             </div>
                             <div>
                               <span className="font-medium">Notional:</span>{" "}
-                              {new Intl.NumberFormat("en-US", {
-                                style: "currency",
-                                currency:
-                                  cdmOutput.tradableProduct.economicTerms
-                                    .notional.currency,
-                              }).format(
-                                cdmOutput.tradableProduct.economicTerms.notional
-                                  .amount
-                              )}
+                              {selectedEvent?.notionalValue 
+                                ? new Intl.NumberFormat("en-US", {
+                                    style: "currency",
+                                    currency: selectedEvent.currency || "USD",
+                                  }).format(selectedEvent.notionalValue)
+                                : "N/A"}
                             </div>
                           </div>
                           <div className="bg-muted/50 p-4 rounded-lg">
                             <pre className="text-xs overflow-auto max-h-96">
-                              {JSON.stringify(cdmOutput, null, 2)}
+                              {JSON.stringify(payload, null, 2)}
                             </pre>
                           </div>
                         </div>
@@ -200,9 +226,8 @@ const TradeDetail = () => {
                   <Card className="p-6">
                     <h4 className="text-lg font-semibold mb-4">DRR Report</h4>
                     {(() => {
-                      const drrReport = mockDRRReports.find(
-                        (r) => r.eventId === selectedEvent.id
-                      );
+                      // DRR reports not yet available via API
+                      const drrReport = null;
                       if (!drrReport) {
                         return (
                           <p className="text-muted-foreground">

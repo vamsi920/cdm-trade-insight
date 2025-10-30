@@ -1,24 +1,45 @@
 import { useState } from "react";
-import { mockTrades } from "@/data/mockTrades";
+import { useQuery } from "@tanstack/react-query";
 import { TradeSelector } from "@/components/TradeSelector";
 import { TradeTimeline } from "@/components/TradeTimeline";
 import { NarrativeSummary } from "@/components/NarrativeSummary";
 import { ChatAssistant } from "@/components/ChatAssistant";
-import { TrendingUp, ArrowLeft } from "lucide-react";
+import { TrendingUp, ArrowLeft, Loader2 } from "lucide-react";
 import { TradeEvent } from "@/types/trade";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockCDMOutputs, mockDRRReports } from "@/data/cdmOutputs";
+import { api } from "@/lib/api";
 
 const Index = () => {
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<TradeEvent | null>(null);
 
-  const selectedTrade = mockTrades.find(
-    (trade) => trade.id === selectedTradeId
-  );
+  // Fetch all trades for selector
+  const { data: trades = [], isLoading: isLoadingTrades } = useQuery({
+    queryKey: ["trades"],
+    queryFn: () => api.getTrades(),
+    staleTime: 30000,
+  });
+
+  // Fetch selected trade details
+  const { data: selectedTrade, isLoading: isLoadingTrade } = useQuery({
+    queryKey: ["trade", selectedTradeId],
+    queryFn: () => api.getTrade(selectedTradeId!),
+    enabled: !!selectedTradeId,
+    staleTime: 30000,
+  });
+
+  // Fetch CDM output for selected event
+  const { data: cdmOutput } = useQuery({
+    queryKey: ["trade-state", selectedTradeId, selectedEvent?.metadata?.trade_state_id],
+    queryFn: () => {
+      if (!selectedEvent?.metadata?.trade_state_id) return null;
+      return api.getTradeState(selectedTradeId!, selectedEvent.metadata.trade_state_id);
+    },
+    enabled: !!selectedTradeId && !!selectedEvent?.metadata?.trade_state_id,
+  });
 
   const handleEventClick = (event: TradeEvent) => {
     setSelectedEvent(event);
@@ -56,11 +77,28 @@ const Index = () => {
           </div>
         </div>
         <div className="flex-1 overflow-auto">
-          <TradeSelector
-            trades={mockTrades}
-            selectedTradeId={selectedTradeId}
-            onSelectTrade={setSelectedTradeId}
-          />
+          {isLoadingTrades ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <TradeSelector
+              trades={trades.map(t => ({
+                id: t.id,
+                productType: t.productType,
+                counterparty: "Unknown",
+                bank: "Unknown",
+                currentNotional: t.currentNotional,
+                currency: t.currency,
+                startDate: "",
+                maturityDate: "",
+                status: t.status,
+                events: []
+              }))}
+              selectedTradeId={selectedTradeId}
+              onSelectTrade={setSelectedTradeId}
+            />
+          )}
           {selectedTrade && (
             <div className="p-4 border-t border-border">
               <TradeTimeline
@@ -76,7 +114,11 @@ const Index = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col">
-        {selectedTrade ? (
+        {isLoadingTrade ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : selectedTrade ? (
           <div className="flex-1 flex">
             {/* Main Content */}
             <div className="flex-1 p-6 overflow-auto">
@@ -148,53 +190,48 @@ const Index = () => {
                           CDM Output
                         </h4>
                         {(() => {
-                          const cdmOutput = mockCDMOutputs.find(
-                            (c) => c.eventId === selectedEvent.id
-                          );
-                          if (!cdmOutput) {
+                          if (!cdmOutput?.payload) {
                             return (
                               <p className="text-muted-foreground">
-                                No CDM output available for this event.
+                                {cdmOutput === undefined ? "Loading..." : "No CDM output available for this event."}
                               </p>
                             );
                           }
+                          const payload = cdmOutput.payload;
+                          // Extract data from CDM payload
+                          const tradeState = payload.tradeState || payload.trade_state || payload;
+                          const trade = tradeState.trade || {};
+                          const tradableProduct = trade.tradableProduct || {};
+                          const product = tradableProduct.product || {};
+                          
                           return (
                             <div className="space-y-4">
                               <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                  <span className="font-medium">
-                                    CDM Version:
-                                  </span>{" "}
-                                  {cdmOutput.cdmVersion}
+                                  <span className="font-medium">Trade State ID:</span>{" "}
+                                  {selectedEvent?.metadata?.trade_state_id || "N/A"}
                                 </div>
                                 <div>
-                                  <span className="font-medium">
-                                    Event Type:
-                                  </span>{" "}
-                                  {cdmOutput.businessEvent.eventType}
+                                  <span className="font-medium">Event Type:</span>{" "}
+                                  {selectedEvent?.type || "N/A"}
                                 </div>
                                 <div>
-                                  <span className="font-medium">
-                                    Product Type:
-                                  </span>{" "}
-                                  {cdmOutput.tradableProduct.productType}
+                                  <span className="font-medium">Product Type:</span>{" "}
+                                  {product.productType?.value || "N/A"}
                                 </div>
                                 <div>
                                   <span className="font-medium">Notional:</span>{" "}
-                                  {new Intl.NumberFormat("en-US", {
-                                    style: "currency",
-                                    currency:
-                                      cdmOutput.tradableProduct.economicTerms
-                                        .notional.currency,
-                                  }).format(
-                                    cdmOutput.tradableProduct.economicTerms
-                                      .notional.amount
-                                  )}
+                                  {selectedEvent?.notionalValue 
+                                    ? new Intl.NumberFormat("en-US", {
+                                        style: "currency",
+                                        currency: selectedEvent.currency || "USD",
+                                      }).format(selectedEvent.notionalValue)
+                                    : "N/A"}
                                 </div>
                               </div>
                               <div className="bg-muted/50 p-4 rounded-lg">
-                                <pre className="text-xs overflow-auto">
-                                  {JSON.stringify(cdmOutput, null, 2)}
+                                <pre className="text-xs overflow-auto max-h-96">
+                                  {JSON.stringify(payload, null, 2)}
                                 </pre>
                               </div>
                             </div>
@@ -209,9 +246,8 @@ const Index = () => {
                           DRR Report
                         </h4>
                         {(() => {
-                          const drrReport = mockDRRReports.find(
-                            (r) => r.eventId === selectedEvent.id
-                          );
+                          // DRR reports not yet available via API
+                          const drrReport = null;
                           if (!drrReport) {
                             return (
                               <p className="text-muted-foreground">

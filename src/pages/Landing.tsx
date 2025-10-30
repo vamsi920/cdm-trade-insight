@@ -1,35 +1,55 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, Search } from "lucide-react";
+import { TrendingUp, Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { mockTrades } from "@/data/mockTrades";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 const Landing = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trade = mockTrades.find(
-      (t) => t.id.toLowerCase() === searchQuery.toLowerCase()
-    );
+  // Fetch recent trades
+  const { data: recentTrades = [], isLoading: isLoadingTrades } = useQuery({
+    queryKey: ["trades", "recent"],
+    queryFn: async () => {
+      const trades = await api.getTrades();
+      return trades.slice(0, 6);
+    },
+    staleTime: 30000, // Cache for 30 seconds
+  });
 
-    if (trade) {
-      navigate(`/trade/${trade.id}`);
-    } else {
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!searchQuery.trim()) {
+      return;
+    }
+
+    try {
+      const results = await api.searchTrades(searchQuery);
+      
+      if (results.length > 0) {
+        navigate(`/trade/${results[0].id}`);
+      } else {
+        toast({
+          title: "Trade not found",
+          description: "Please check the Trade ID and try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       toast({
-        title: "Trade not found",
-        description: "Please check the Trade ID and try again.",
+        title: "Search failed",
+        description: error instanceof Error ? error.message : "Unable to search trades. Please try again.",
         variant: "destructive",
       });
     }
   };
-
-  const recentTrades = mockTrades.slice(0, 6);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/10">
@@ -106,43 +126,53 @@ const Landing = () => {
               </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recentTrades.map((trade) => (
-                <Card
-                  key={trade.id}
-                  onClick={() => navigate(`/trade/${trade.id}`)}
-                  className="p-4 cursor-pointer hover-lift fast-transition bg-card border-border group"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-mono text-red-600 font-semibold">
-                        {trade.id}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          trade.status === "Active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-secondary text-secondary-foreground"
-                        }`}
-                      >
-                        {trade.status}
-                      </span>
+              {isLoadingTrades ? (
+                <div className="col-span-3 flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : recentTrades.length === 0 ? (
+                <div className="col-span-3 text-center py-12 text-muted-foreground">
+                  No trades found
+                </div>
+              ) : (
+                recentTrades.map((trade) => (
+                  <Card
+                    key={trade.id}
+                    onClick={() => navigate(`/trade/${trade.id}`)}
+                    className="p-4 cursor-pointer hover-lift fast-transition bg-card border-border group"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-mono text-red-600 font-semibold">
+                          {trade.id}
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full ${
+                            trade.status === "Active"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-secondary text-secondary-foreground"
+                          }`}
+                        >
+                          {trade.status}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-foreground group-hover:text-primary fast-transition">
+                        {trade.productType}
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Trade</span>
+                        <span className="font-semibold">
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: trade.currency,
+                            notation: "compact",
+                          }).format(trade.currentNotional)}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-foreground group-hover:text-primary fast-transition">
-                      {trade.productType}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{trade.counterparty}</span>
-                      <span className="font-semibold">
-                        {new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: trade.currency,
-                          notation: "compact",
-                        }).format(trade.currentNotional)}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         </div>
