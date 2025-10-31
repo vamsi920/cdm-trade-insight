@@ -5,126 +5,148 @@ Read-only MCP server for querying CDM trade states and business events
 import asyncio
 import os
 from typing import Annotated, Dict, Any, List
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool
+
+try:
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import Tool
+    MCP_ENABLED = True
+except ImportError:
+    # Allow importing this module without the optional MCP dependencies installed.
+    Server = None  # type: ignore[assignment]
+    stdio_server = None  # type: ignore[assignment]
+    Tool = Any  # type: ignore[assignment]
+    MCP_ENABLED = False
 from common.db import conn, q, one
 from common.diff import notional, fixed_rate, changed, appended
 
 cnx = conn()
-server = Server("cdm-db")
+server = Server("cdm-db") if MCP_ENABLED else None
 
-@server.list_tools()
-async def list_tools() -> List[Tool]:
-    """List available tools"""
-    return [
-        Tool(
-            name="get_trade_states",
-            description="Get all states for a trade ordered by version",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "trade_id": {
-                        "type": "string",
-                        "description": "logical trade id"
-                    }
-                },
-                "required": ["trade_id"]
-            }
-        ),
-        Tool(
-            name="get_lineage",
-            description="Get before/after relationships, intent, and effective date for a trade state",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "trade_state_id": {
-                        "type": "string",
-                        "description": "state id"
-                    }
-                },
-                "required": ["trade_state_id"]
-            }
-        ),
-        Tool(
-            name="get_tradestate_payload",
-            description="Get full TradeState JSON payload",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "trade_state_id": {
-                        "type": "string",
-                        "description": "state id"
-                    }
-                },
-                "required": ["trade_state_id"]
-            }
-        ),
-        Tool(
-            name="get_business_event",
-            description="Get full BusinessEvent JSON payload",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "event_id": {
-                        "type": "string",
-                        "description": "event id"
-                    }
-                },
-                "required": ["event_id"]
-            }
-        ),
-        Tool(
-            name="diff_states",
-            description="Compare two trade states showing changes and appends",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "from_state_id": {
-                        "type": "string",
-                        "description": "from"
+if MCP_ENABLED and server is not None:
+    @server.list_tools()
+    async def list_tools() -> List[Tool]:
+        """List available tools"""
+        return [
+            Tool(
+                name="get_trade_states",
+                description="Get all states for a trade ordered by version",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "trade_id": {
+                            "type": "string",
+                            "description": "logical trade id"
+                        }
                     },
-                    "to_state_id": {
-                        "type": "string",
-                        "description": "to"
-                    }
-                },
-                "required": ["from_state_id", "to_state_id"]
-            }
-        ),
-        Tool(
-            name="get_trade_lineage",
-            description="Get complete timeline lineage for a trade with enriched event data (intent, effectiveDate, relationships) - optimized for UI timeline views",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "trade_id": {
-                        "type": "string",
-                        "description": "logical trade id"
-                    }
-                },
-                "required": ["trade_id"]
-            }
-        )
-    ]
+                    "required": ["trade_id"]
+                }
+            ),
+            Tool(
+                name="get_lineage",
+                description="Get before/after relationships, intent, and effective date for a trade state",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "trade_state_id": {
+                            "type": "string",
+                            "description": "state id"
+                        }
+                    },
+                    "required": ["trade_state_id"]
+                }
+            ),
+            Tool(
+                name="get_tradestate_payload",
+                description="Get full TradeState JSON payload",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "trade_state_id": {
+                            "type": "string",
+                            "description": "state id"
+                        }
+                    },
+                    "required": ["trade_state_id"]
+                }
+            ),
+            Tool(
+                name="get_business_event",
+                description="Get full BusinessEvent JSON payload",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "event_id": {
+                            "type": "string",
+                            "description": "event id"
+                        }
+                    },
+                    "required": ["event_id"]
+                }
+            ),
+            Tool(
+                name="diff_states",
+                description="Compare two trade states showing changes and appends",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "from_state_id": {
+                            "type": "string",
+                            "description": "from"
+                        },
+                        "to_state_id": {
+                            "type": "string",
+                            "description": "to"
+                        }
+                    },
+                    "required": ["from_state_id", "to_state_id"]
+                }
+            ),
+            Tool(
+                name="get_trade_lineage",
+                description="Get complete timeline lineage for a trade with enriched event data (intent, effectiveDate, relationships) - optimized for UI timeline views",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "trade_id": {
+                            "type": "string",
+                            "description": "logical trade id"
+                        }
+                    },
+                    "required": ["trade_id"]
+                }
+            )
+        ]
 
-@server.call_tool()
-async def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle tool calls"""
-    if name == "get_trade_states":
-        return await get_trade_states(arguments["trade_id"])
-    elif name == "get_lineage":
-        return await get_lineage(arguments["trade_state_id"])
-    elif name == "get_tradestate_payload":
-        return await get_tradestate_payload(arguments["trade_state_id"])
-    elif name == "get_business_event":
-        return await get_business_event(arguments["event_id"])
-    elif name == "diff_states":
-        return await diff_states(arguments["from_state_id"], arguments["to_state_id"])
-    elif name == "get_trade_lineage":
-        return await get_trade_lineage(arguments["trade_id"])
-    else:
-        raise ValueError(f"Unknown tool: {name}")
+    @server.call_tool()
+    async def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle tool calls"""
+        if name == "get_trade_states":
+            return await get_trade_states(arguments["trade_id"])
+        elif name == "get_lineage":
+            return await get_lineage(arguments["trade_state_id"])
+        elif name == "get_tradestate_payload":
+            return await get_tradestate_payload(arguments["trade_state_id"])
+        elif name == "get_business_event":
+            return await get_business_event(arguments["event_id"])
+        elif name == "diff_states":
+            return await diff_states(arguments["from_state_id"], arguments["to_state_id"])
+        elif name == "get_trade_lineage":
+            return await get_trade_lineage(arguments["trade_id"])
+        else:
+            raise ValueError(f"Unknown tool: {name}")
+else:
+    async def list_tools() -> List[Any]:
+        """Fallback implementation when MCP support is unavailable."""
+        raise RuntimeError(
+            "MCP tooling is unavailable because the optional `mcp` package is not installed."
+        )
+
+    async def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback implementation when MCP support is unavailable."""
+        raise RuntimeError(
+            "MCP tooling is unavailable because the optional `mcp` package is not installed."
+        )
 
 async def get_trade_states(trade_id: str) -> Dict[str, Any]:
     """Get all states for a trade ordered by version"""
@@ -319,6 +341,8 @@ async def get_trade_lineage(trade_id: str) -> Dict[str, Any]:
 
 async def main():
     """Run the MCP server"""
+    if not MCP_ENABLED or server is None or stdio_server is None:
+        raise RuntimeError("Cannot start MCP server because the optional `mcp` dependency is not installed.")
     async with stdio_server(server).run():
         await asyncio.Event().wait()
 

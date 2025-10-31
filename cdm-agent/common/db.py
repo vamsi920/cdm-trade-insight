@@ -11,7 +11,7 @@ load_dotenv()
 
 def conn():
     """Create PostgreSQL connection using environment variables"""
-    return psycopg2.connect(
+    connection = psycopg2.connect(
         host=os.getenv('PGHOST', 'localhost'),
         port=os.getenv('PGPORT', '5432'),
         database=os.getenv('PGDATABASE', 'cdm_demo'),
@@ -19,6 +19,8 @@ def conn():
         password=os.getenv('PGPASSWORD', 'cdm'),
         cursor_factory=RealDictCursor
     )
+    connection.autocommit = True
+    return connection
 
 def q(cnx, sql, params=None):
     """Execute query returning list of dicts"""

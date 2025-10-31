@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TradeSelector } from "@/components/TradeSelector";
 import { TradeTimeline } from "@/components/TradeTimeline";
@@ -17,14 +17,24 @@ const Index = () => {
   const [selectedEvent, setSelectedEvent] = useState<TradeEvent | null>(null);
 
   // Fetch all trades for selector
-  const { data: trades = [], isLoading: isLoadingTrades } = useQuery({
+  const {
+    data: trades = [],
+    isLoading: isLoadingTrades,
+    isError: isTradesError,
+    error: tradesError,
+  } = useQuery({
     queryKey: ["trades"],
     queryFn: () => api.getTrades(),
     staleTime: 30000,
   });
 
   // Fetch selected trade details
-  const { data: selectedTrade, isLoading: isLoadingTrade } = useQuery({
+  const {
+    data: selectedTrade,
+    isLoading: isLoadingTrade,
+    isError: isSelectedTradeError,
+    error: selectedTradeError,
+  } = useQuery({
     queryKey: ["trade", selectedTradeId],
     queryFn: () => api.getTrade(selectedTradeId!),
     enabled: !!selectedTradeId,
@@ -32,7 +42,11 @@ const Index = () => {
   });
 
   // Fetch CDM output for selected event
-  const { data: cdmOutput } = useQuery({
+  const {
+    data: cdmOutput,
+    isError: isCdmError,
+    error: cdmError,
+  } = useQuery({
     queryKey: ["trade-state", selectedTradeId, selectedEvent?.metadata?.trade_state_id],
     queryFn: () => {
       if (!selectedEvent?.metadata?.trade_state_id) return null;
@@ -48,6 +62,16 @@ const Index = () => {
   const clearSelectedEvent = () => {
     setSelectedEvent(null);
   };
+
+  useEffect(() => {
+    if (!selectedTradeId && trades.length > 0 && !isTradesError) {
+      setSelectedTradeId(trades[0].id);
+    }
+  }, [trades, selectedTradeId, isTradesError]);
+
+  useEffect(() => {
+    setSelectedEvent(null);
+  }, [selectedTradeId]);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -81,19 +105,29 @@ const Index = () => {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
+          ) : isTradesError ? (
+            <div className="px-4 py-12 text-sm text-destructive text-center">
+              {tradesError instanceof Error
+                ? tradesError.message
+                : "Unable to load trade list."}
+            </div>
+          ) : trades.length === 0 ? (
+            <div className="px-4 py-12 text-sm text-muted-foreground text-center">
+              No trades available.
+            </div>
           ) : (
             <TradeSelector
-              trades={trades.map(t => ({
+              trades={trades.map((t) => ({
                 id: t.id,
                 productType: t.productType,
-                counterparty: "Unknown",
-                bank: "Unknown",
+                counterparty: t.counterparty,
+                bank: t.bank,
                 currentNotional: t.currentNotional,
                 currency: t.currency,
-                startDate: "",
-                maturityDate: "",
+                startDate: t.startDate ?? "",
+                maturityDate: t.maturityDate ?? "",
                 status: t.status,
-                events: []
+                events: [],
               }))}
               selectedTradeId={selectedTradeId}
               onSelectTrade={setSelectedTradeId}
@@ -117,6 +151,12 @@ const Index = () => {
         {isLoadingTrade ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : isSelectedTradeError ? (
+          <div className="flex-1 flex items-center justify-center px-6 text-center text-destructive">
+            {selectedTradeError instanceof Error
+              ? selectedTradeError.message
+              : "Unable to load the selected trade."}
           </div>
         ) : selectedTrade ? (
           <div className="flex-1 flex">
@@ -190,6 +230,15 @@ const Index = () => {
                           CDM Output
                         </h4>
                         {(() => {
+                          if (isCdmError) {
+                            return (
+                              <p className="text-destructive">
+                                {cdmError instanceof Error
+                                  ? cdmError.message
+                                  : "Unable to load CDM output for this event."}
+                              </p>
+                            );
+                          }
                           if (!cdmOutput?.payload) {
                             return (
                               <p className="text-muted-foreground">

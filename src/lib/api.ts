@@ -8,6 +8,10 @@ interface TradeSummary {
   status: "Active" | "Terminated" | "Pending";
   currentNotional: number;
   currency: string;
+  counterparty: string;
+  bank: string;
+  startDate?: string | null;
+  maturityDate?: string | null;
 }
 
 interface TradeStateResponse {
@@ -120,4 +124,3 @@ export const api = {
 };
 
 export { ApiError };
-

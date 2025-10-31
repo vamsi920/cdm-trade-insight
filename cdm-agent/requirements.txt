@@ -3,8 +3,8 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 
-# MCP dependencies
-mcp>=1.0.0
+# MCP dependencies (optional for MCP server tooling)
+# Install the `mcp` package separately if you need the MCP stdio server.
 
 # Database dependencies
 psycopg2-binary>=2.9.9
@@ -14,4 +14,3 @@ python-dotenv>=1.0.0
 
 # Data validation
 pydantic>=2.0.0
-

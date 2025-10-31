@@ -14,7 +14,12 @@ const Landing = () => {
   const { toast } = useToast();
 
   // Fetch recent trades
-  const { data: recentTrades = [], isLoading: isLoadingTrades } = useQuery({
+  const {
+    data: recentTrades = [],
+    isLoading: isLoadingTrades,
+    isError: isRecentTradesError,
+    error: recentTradesError,
+  } = useQuery({
     queryKey: ["trades", "recent"],
     queryFn: async () => {
       const trades = await api.getTrades();
@@ -130,6 +135,12 @@ const Landing = () => {
                 <div className="col-span-3 flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 </div>
+              ) : isRecentTradesError ? (
+                <div className="col-span-3 text-center py-12 text-destructive">
+                  {recentTradesError instanceof Error
+                    ? recentTradesError.message
+                    : "Unable to load recent trades right now."}
+                </div>
               ) : recentTrades.length === 0 ? (
                 <div className="col-span-3 text-center py-12 text-muted-foreground">
                   No trades found
@@ -159,8 +170,11 @@ const Landing = () => {
                       <p className="text-sm font-medium text-foreground group-hover:text-primary fast-transition">
                         {trade.productType}
                       </p>
+                      <p className="text-xs text-muted-foreground">
+                        Counterparty · {trade.counterparty}
+                      </p>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Trade</span>
+                        <span>{trade.bank}</span>
                         <span className="font-semibold">
                           {new Intl.NumberFormat("en-US", {
                             style: "currency",

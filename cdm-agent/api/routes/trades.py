@@ -12,10 +12,12 @@ from providers.cdm_db.provider import (
 )
 from common.db import conn, q, one
 from common.transform import (
-    transform_to_trade, 
-    transform_timeline_to_events,
+    transform_to_trade,
     extract_product_type,
-    extract_currency
+    extract_currency,
+    extract_parties,
+    extract_dates,
+    apply_default_trade_metadata,
 )
 from common.diff import notional as extract_notional
 
@@ -57,7 +59,9 @@ async def list_trades():
                 product_type = extract_product_type(latest_payload)
                 notional_val = extract_notional(latest_payload) or 0.0
                 currency = extract_currency(latest_payload)
-                
+                parties = extract_parties(latest_payload)
+                dates = extract_dates(latest_payload)
+
                 # Determine status from latest position_state
                 latest_entry = timeline["timeline"][-1]
                 position_state = latest_entry.get("position_state", "")
@@ -69,13 +73,28 @@ async def list_trades():
                     "AMENDED": "Active"
                 }
                 status = status_map.get(position_state, "Active")
-                
+
+                enriched = apply_default_trade_metadata(
+                    trade_id,
+                    {
+                        "productType": product_type,
+                        "currentNotional": notional_val,
+                        "currency": currency,
+                        "counterparty": parties.get("counterparty"),
+                        "bank": parties.get("bank"),
+                        "startDate": dates.get("startDate"),
+                        "maturityDate": dates.get("maturityDate"),
+                    },
+                )
+
                 summaries.append({
                     "id": trade_id,
-                    "productType": product_type,
+                    "productType": enriched["productType"],
                     "status": status,
-                    "currentNotional": notional_val,
-                    "currency": currency
+                    "currentNotional": enriched["currentNotional"],
+                    "currency": enriched["currency"],
+                    "counterparty": enriched.get("counterparty", "Unknown"),
+                    "bank": enriched.get("bank", "Unknown")
                 })
             except Exception as e:
                 # Log errors but continue processing other trades
@@ -96,13 +115,16 @@ async def list_trades():
 
 
 @router.get("/trades/search")
-async def search_trades(q: str = Query(..., description="Search query for trade ID")):
+async def search_trades(
+    query: str = Query(..., alias="q", description="Search query for trade ID")
+):
     """Search trades by trade ID (case-insensitive)"""
     try:
         # Search in database
-        results = q(cnx, 
+        results = q(
+            cnx,
             "SELECT DISTINCT trade_id FROM trade_state WHERE LOWER(trade_id) LIKE LOWER(%s) ORDER BY trade_id LIMIT 20",
-            (f"%{q}%",)
+            (f"%{query}%",)
         )
         
         if not results:
@@ -124,7 +146,9 @@ async def search_trades(q: str = Query(..., description="Search query for trade 
                 product_type = extract_product_type(latest_payload)
                 notional_val = extract_notional(latest_payload) or 0.0
                 currency = extract_currency(latest_payload)
-                
+                parties = extract_parties(latest_payload)
+                dates = extract_dates(latest_payload)
+
                 latest_entry = timeline["timeline"][-1]
                 position_state = latest_entry.get("position_state", "")
                 status_map = {
@@ -135,13 +159,28 @@ async def search_trades(q: str = Query(..., description="Search query for trade 
                     "AMENDED": "Active"
                 }
                 status = status_map.get(position_state, "Active")
-                
+
+                enriched = apply_default_trade_metadata(
+                    trade_id,
+                    {
+                        "productType": product_type,
+                        "currentNotional": notional_val,
+                        "currency": currency,
+                        "counterparty": parties.get("counterparty"),
+                        "bank": parties.get("bank"),
+                        "startDate": dates.get("startDate"),
+                        "maturityDate": dates.get("maturityDate"),
+                    },
+                )
+
                 summaries.append({
                     "id": trade_id,
-                    "productType": product_type,
+                    "productType": enriched["productType"],
                     "status": status,
-                    "currentNotional": notional_val,
-                    "currency": currency
+                    "currentNotional": enriched["currentNotional"],
+                    "currency": enriched["currency"],
+                    "counterparty": enriched.get("counterparty", "Unknown"),
+                    "bank": enriched.get("bank", "Unknown")
                 })
             except Exception:
                 continue

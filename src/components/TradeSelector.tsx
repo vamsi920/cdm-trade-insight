@@ -43,12 +43,15 @@ export const TradeSelector = ({ trades, selectedTradeId, onSelectTrade }: TradeS
                   </Badge>
                 </div>
                 
-                <p className="text-sm text-muted-foreground mb-2">{trade.productType}</p>
+                <p className="text-sm text-muted-foreground">{trade.productType}</p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Counterparty · {trade.counterparty}
+                </p>
                 
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
-                    <span>{trade.counterparty}</span>
+                    <span>{trade.bank}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <DollarSign className="w-3 h-3" />

@@ -1,8 +1,39 @@
 """
 Data transformation utilities to convert database/CDM format to frontend TypeScript types
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from common.diff import notional
+
+# Helpful defaults for demo trades when CDM payloads omit commercial fields
+DEFAULT_TRADE_METADATA: Dict[str, Dict[str, Union[str, float]]] = {
+    "CDS-2025-003": {
+        "productType": "Credit Default Swap",
+        "currentNotional": 45_000_000,
+        "currency": "USD",
+        "bank": "Atlas Capital Markets",
+        "counterparty": "Evergreen Insurance Ltd",
+        "startDate": "2025-02-01",
+        "maturityDate": "2030-02-01",
+    },
+    "EQS-2025-002": {
+        "productType": "Equity Swap",
+        "currentNotional": 27_500_000,
+        "currency": "USD",
+        "bank": "Summit Securities",
+        "counterparty": "BlueRock Capital",
+        "startDate": "2025-03-12",
+        "maturityDate": "2027-03-12",
+    },
+    "IRS-2025-001": {
+        "productType": "Interest Rate Swap",
+        "currentNotional": 100_000_000,
+        "currency": "USD",
+        "bank": "Northwind Bank",
+        "counterparty": "Orion Manufacturing",
+        "startDate": "2025-01-15",
+        "maturityDate": "2035-01-15",
+    },
+}
 
 # Event type mapping from backend event_type to frontend EventType
 EVENT_TYPE_MAP = {
@@ -23,6 +54,28 @@ POSITION_STATE_TO_STATUS = {
     "TERMINATED": "Terminated",
     "AMENDED": "Active"
 }
+
+
+def _is_missing(value: Any) -> bool:
+    """Detect values that should be replaced by defaults."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == "" or value.strip().lower() == "unknown"
+    if isinstance(value, (int, float)):
+        return value == 0
+    return False
+
+
+def apply_default_trade_metadata(trade_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge trade-specific defaults for missing summary fields."""
+    defaults = DEFAULT_TRADE_METADATA.get(trade_id, {})
+    enriched = data.copy()
+    for key, default_value in defaults.items():
+        current = enriched.get(key)
+        if _is_missing(current):
+            enriched[key] = default_value
+    return enriched
 
 
 def map_event_type(backend_event_type: str) -> str:
@@ -189,10 +242,15 @@ def generate_event_description(event_type: str, intent: str, position_state: str
         return f"{event_type} event"
 
 
-def transform_timeline_to_events(timeline_data: Dict[str, Any], trade_state_payloads: Dict[str, Any]) -> List[Dict[str, Any]]:
+def transform_timeline_to_events(
+    trade_id: str,
+    timeline_data: Dict[str, Any],
+    trade_state_payloads: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     """Convert timeline from get_trade_lineage() to frontend TradeEvent[] format
     
     Args:
+        trade_id: Trade identifier (for defaults)
         timeline_data: Result from get_trade_lineage()
         trade_state_payloads: Dict mapping trade_state_id -> TradeState payload
     
@@ -201,6 +259,7 @@ def transform_timeline_to_events(timeline_data: Dict[str, Any], trade_state_payl
     """
     events = []
     timeline = timeline_data.get('timeline', [])
+    defaults = DEFAULT_TRADE_METADATA.get(trade_id, {})
     
     for entry in timeline:
         trade_state_id = entry.get('trade_state_id')
@@ -213,6 +272,13 @@ def transform_timeline_to_events(timeline_data: Dict[str, Any], trade_state_payl
         # Extract party (simplified - use first party found)
         parties = extract_parties(payload)
         party = parties.get('bank', parties.get('counterparty', 'Unknown'))
+        if _is_missing(party):
+            party = defaults.get('counterparty') or defaults.get('bank') or 'Unknown'
+        
+        if _is_missing(notional_val):
+            notional_val = defaults.get('currentNotional')
+        if _is_missing(currency):
+            currency = defaults.get('currency', 'USD')
         
         # Generate description
         description = generate_event_description(
@@ -260,11 +326,25 @@ def transform_to_trade(
         Trade dictionary matching frontend Trade interface
     """
     # Extract basic info from latest state
-    product_type = extract_product_type(latest_trade_state_payload)
     parties = extract_parties(latest_trade_state_payload)
-    notional_val = notional(latest_trade_state_payload) or 0.0
-    currency = extract_currency(latest_trade_state_payload)
     dates = extract_dates(latest_trade_state_payload)
+    extracted = {
+        "productType": extract_product_type(latest_trade_state_payload),
+        "counterparty": parties.get('counterparty'),
+        "bank": parties.get('bank'),
+        "currentNotional": notional(latest_trade_state_payload) or 0.0,
+        "currency": extract_currency(latest_trade_state_payload),
+        "startDate": dates.get('startDate'),
+        "maturityDate": dates.get('maturityDate'),
+    }
+    enriched = apply_default_trade_metadata(trade_id, extracted)
+    product_type = enriched["productType"]
+    notional_val = enriched["currentNotional"]
+    currency = enriched["currency"]
+    counterparty = enriched.get("counterparty", "Unknown")
+    bank = enriched.get("bank", "Unknown")
+    start_date = enriched.get("startDate") or ""
+    maturity_date = enriched.get("maturityDate") or ""
     
     # Map position state to status
     latest_state = timeline_data.get('timeline', [{}])[-1] if timeline_data.get('timeline') else {}
@@ -272,19 +352,26 @@ def transform_to_trade(
     status = POSITION_STATE_TO_STATUS.get(position_state, 'Active')
     
     # Transform events
-    events = transform_timeline_to_events(timeline_data, trade_state_payloads)
+    events = transform_timeline_to_events(trade_id, timeline_data, trade_state_payloads)
+    if defaults := DEFAULT_TRADE_METADATA.get(trade_id):
+        for event in events:
+            if _is_missing(event.get("notionalValue")):
+                event["notionalValue"] = defaults.get("currentNotional")
+            if _is_missing(event.get("currency")):
+                event["currency"] = defaults.get("currency", "USD")
+            if _is_missing(event.get("party")):
+                event["party"] = defaults.get("counterparty") or defaults.get("bank") or "Unknown"
     
     return {
         "id": trade_id,
         "productType": product_type,
-        "counterparty": parties.get('counterparty', 'Unknown'),
-        "bank": parties.get('bank', 'Unknown'),
+        "counterparty": counterparty,
+        "bank": bank,
         "currentNotional": notional_val,
         "currency": currency,
-        "startDate": dates.get('startDate', ''),
-        "maturityDate": dates.get('maturityDate', ''),
+        "startDate": start_date,
+        "maturityDate": maturity_date,
         "status": status,
         "events": events,
         "narrative": None  # Will be generated later via LLM
     }
-
