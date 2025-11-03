@@ -219,30 +219,34 @@ Complete!               [██████████████████�
 
 ## Benefits at a Glance
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| **Visibility** | Generic "Generating..." | 15+ detailed steps |
-| **Timing** | Unknown duration | Real-time millisecond updates |
-| **Caching** | Silent | Clear cache hit/miss messages |
-| **Errors** | Generic error | Specific, helpful error messages |
-| **Tool Calls** | Hidden | Full transparency with args |
-| **Tokens** | Unknown cost | Exact token usage displayed |
-| **User Feeling** | Anxious waiting | Engaged and informed |
+| Aspect           | Before                  | After                            |
+| ---------------- | ----------------------- | -------------------------------- |
+| **Visibility**   | Generic "Generating..." | 15+ detailed steps               |
+| **Timing**       | Unknown duration        | Real-time millisecond updates    |
+| **Caching**      | Silent                  | Clear cache hit/miss messages    |
+| **Errors**       | Generic error           | Specific, helpful error messages |
+| **Tool Calls**   | Hidden                  | Full transparency with args      |
+| **Tokens**       | Unknown cost            | Exact token usage displayed      |
+| **User Feeling** | Anxious waiting         | Engaged and informed             |
 
 ---
 
 ## Real-World Scenarios
 
 ### Scenario 1: First-Time User
+
 **What they see:** Step-by-step guidance showing exactly what the AI is doing, making the system feel transparent and trustworthy.
 
 ### Scenario 2: Impatient User
+
 **What they see:** Real-time progress with timing info, knowing it will be instant next time. The friendly emojis and messages make waiting more pleasant.
 
 ### Scenario 3: Technical User
+
 **What they see:** Full details about tool calls, arguments, response times, and token usage - perfect for understanding and debugging.
 
 ### Scenario 4: Cost-Conscious User
+
 **What they see:** Clear indication of cached vs fresh narratives, with token counts showing exactly what's being spent.
 
 ---
@@ -261,4 +265,3 @@ Complete!               [██████████████████�
 ---
 
 **Remember:** Every message is designed to make you feel informed, confident, and delighted! 🎉
-
