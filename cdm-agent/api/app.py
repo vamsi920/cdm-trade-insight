@@ -4,7 +4,7 @@ FastAPI application for CDM Trade Insight API
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import trades
+from api.routes import trades, narratives
 
 # Configure logging
 logging.basicConfig(
@@ -35,4 +35,5 @@ async def health_check():
 
 # Include routers
 app.include_router(trades.router, prefix="/api", tags=["trades"])
+app.include_router(narratives.router, prefix="/api", tags=["narratives"])
 

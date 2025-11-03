@@ -28,9 +28,21 @@ def q(cnx, sql, params=None):
         cursor.execute(sql, params)
         return cursor.fetchall()
 
+def execute(cnx, sql, params=None):
+    """Execute statement that does not return rows"""
+    with cnx.cursor() as cursor:
+        cursor.execute(sql, params)
+        return cursor.rowcount
+
 def one(cnx, sql, params=None):
     """Execute query returning single dict or None"""
     with cnx.cursor() as cursor:
         cursor.execute(sql, params)
         result = cursor.fetchone()
         return result
+
+def execute_migration(cnx, sql):
+    """Execute migration SQL"""
+    with cnx.cursor() as cursor:
+        cursor.execute(sql)
+    return True

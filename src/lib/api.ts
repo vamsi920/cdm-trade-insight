@@ -1,4 +1,5 @@
 import { Trade, TradeEvent } from "@/types/trade";
+import { NarrativeResponse, NarrativePerspective } from "@/types/narrative";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
@@ -120,6 +121,47 @@ export const api = {
     return fetchApi<TradeEventResponse>(
       `/trades/${encodeURIComponent(tradeId)}/event/${encodeURIComponent(eventId)}`
     );
+  },
+
+  /**
+   * Get trade-level narrative from storage (does not generate)
+   */
+  async getTradeNarrative(tradeId: string): Promise<NarrativeResponse> {
+    return fetchApi<NarrativeResponse>(
+      `/trades/${encodeURIComponent(tradeId)}/narrative`
+    );
+  },
+
+  /**
+   * Get event-level narrative from storage (does not generate)
+   */
+  async getEventNarrative(tradeId: string, eventId: string): Promise<NarrativeResponse> {
+    return fetchApi<NarrativeResponse>(
+      `/trades/${encodeURIComponent(tradeId)}/events/${encodeURIComponent(eventId)}/narrative`
+    );
+  },
+
+  /**
+   * Get SSE URL for generating trade-level narrative
+   */
+  getTradeNarrativeStreamUrl(tradeId: string): string {
+    return `/trades/${encodeURIComponent(tradeId)}/narrative/generate`;
+  },
+
+  /**
+   * Get SSE URL for generating event-level narrative
+   */
+  getEventNarrativeStreamUrl(tradeId: string, eventId: string, tradeStateId: string): string {
+    return `/trades/${encodeURIComponent(tradeId)}/events/${encodeURIComponent(eventId)}/narrative/generate?trade_state_id=${encodeURIComponent(tradeStateId)}`;
+  },
+
+  /**
+   * Invalidate all narratives for a trade
+   */
+  async invalidateTradeNarratives(tradeId: string): Promise<{ deleted: number; trade_id: string }> {
+    return fetchApi(`/trades/${encodeURIComponent(tradeId)}/narrative`, {
+      method: 'DELETE',
+    });
   },
 };
 

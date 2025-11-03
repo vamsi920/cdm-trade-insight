@@ -144,28 +144,7 @@ const TradeDetail = () => {
                 </TabsList>
 
                 <TabsContent value="narrative" className="space-y-4">
-                  <Card className="p-6">
-                    <h4 className="text-lg font-semibold mb-4">
-                      Event Narrative
-                    </h4>
-                    <p className="text-foreground leading-relaxed">
-                      {selectedEvent.narrative ||
-                        "No detailed narrative available for this event."}
-                    </p>
-                    {selectedEvent.changes && (
-                      <div className="mt-6">
-                        <h5 className="font-semibold mb-3">Key Changes:</h5>
-                        <ul className="space-y-2">
-                          {selectedEvent.changes.map((change, idx) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="text-primary mt-1">•</span>
-                              <span>{change}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </Card>
+                  <NarrativeSummary trade={trade} selectedEvent={selectedEvent} />
                 </TabsContent>
 
                 <TabsContent value="cdm" className="space-y-4">
