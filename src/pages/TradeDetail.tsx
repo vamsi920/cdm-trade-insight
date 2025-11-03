@@ -456,8 +456,10 @@ const TradeDetail = () => {
         </div>
 
         {/* Right Sidebar - Chat Assistant */}
-        <aside className="w-96 border-l border-border bg-card/30">
-          <ChatAssistant trade={trade} embedded={true} />
+        <aside className="w-96 border-l border-border bg-card/30 sticky top-0 h-screen overflow-y-auto">
+          <div className="p-4 h-full">
+            <ChatAssistant trade={trade} embedded={true} />
+          </div>
         </aside>
       </main>
     </div>

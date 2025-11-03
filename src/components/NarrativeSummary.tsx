@@ -34,7 +34,7 @@ export const NarrativeSummary = ({
     Array<{ message?: string; type?: string }>
   >([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [isLogsOpen, setIsLogsOpen] = useState(true);
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [showAlreadyPresentMessage, setShowAlreadyPresentMessage] =
     useState(false);
 
