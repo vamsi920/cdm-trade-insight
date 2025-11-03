@@ -3,7 +3,18 @@ import { Trade, TradeEvent } from "@/types/trade";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, RefreshCw, Sparkles } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Layers,
+  RefreshCw,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { useNarrativeStream } from "@/hooks/use-narrative-stream";
 import { NarrativeProgress } from "@/components/NarrativeProgress";
 import { api } from "@/lib/api";
@@ -19,6 +30,13 @@ export const NarrativeSummary = ({
 }: NarrativeSummaryProps) => {
   const [storedNarrative, setStoredNarrative] = useState<string | null>(null);
   const [isLoadingStored, setIsLoadingStored] = useState(false);
+  const [storedLogs, setStoredLogs] = useState<
+    Array<{ message?: string; type?: string }>
+  >([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isLogsOpen, setIsLogsOpen] = useState(true);
+  const [showAlreadyPresentMessage, setShowAlreadyPresentMessage] =
+    useState(false);
 
   // SSE streaming hook for narrative generation
   const {
@@ -30,11 +48,13 @@ export const NarrativeSummary = ({
     reset: resetGeneration,
   } = useNarrativeStream();
 
-  // Load stored narrative when trade/event changes
+  // Load stored narrative and logs when trade/event changes
   useEffect(() => {
     const loadStoredNarrative = async () => {
       setIsLoadingStored(true);
+      setIsLoadingLogs(true);
       setStoredNarrative(null);
+      setStoredLogs([]);
       resetGeneration();
 
       try {
@@ -47,44 +67,82 @@ export const NarrativeSummary = ({
           if (response.narrative) {
             setStoredNarrative(response.narrative);
           }
+          // Load logs
+          const logsResponse = await api.getEventNarrativeLogs(
+            trade.id,
+            selectedEvent.id
+          );
+          if (logsResponse.logs) {
+            setStoredLogs(logsResponse.logs);
+          }
         } else {
           // Load trade narrative
           const response = await api.getTradeNarrative(trade.id);
           if (response.narrative) {
             setStoredNarrative(response.narrative);
           }
+          // Load logs
+          const logsResponse = await api.getTradeNarrativeLogs(trade.id);
+          if (logsResponse.logs) {
+            setStoredLogs(logsResponse.logs);
+          }
         }
       } catch (error) {
         console.error("Error loading narrative:", error);
       } finally {
         setIsLoadingStored(false);
+        setIsLoadingLogs(false);
       }
     };
 
     loadStoredNarrative();
   }, [trade.id, selectedEvent, resetGeneration]);
 
-  // Update stored narrative when generation completes (with delay for cache hits)
+  // Update stored narrative when generation completes
   useEffect(() => {
     if (generatedNarrative && !isGenerating) {
-      // Check if this was a cache hit (quick completion)
-      const isCacheHit = progress.some((p) => p.type === "cache_hit");
-
-      if (isCacheHit) {
-        // For cache hits, delay showing the narrative to let logs display
-        setTimeout(() => {
-          setStoredNarrative(generatedNarrative);
-        }, 2000); // 2 seconds to see the logs
-      } else {
-        // For fresh generation, show immediately
-        setStoredNarrative(generatedNarrative);
-      }
+      setStoredNarrative(generatedNarrative);
+      // Reload logs after generation completes
+      const loadLogs = async () => {
+        try {
+          if (selectedEvent) {
+            const logsResponse = await api.getEventNarrativeLogs(
+              trade.id,
+              selectedEvent.id
+            );
+            if (logsResponse.logs) {
+              setStoredLogs(logsResponse.logs);
+            }
+          } else {
+            const logsResponse = await api.getTradeNarrativeLogs(trade.id);
+            if (logsResponse.logs) {
+              setStoredLogs(logsResponse.logs);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading logs:", error);
+        }
+      };
+      loadLogs();
     }
-  }, [generatedNarrative, isGenerating, progress]);
+  }, [generatedNarrative, isGenerating, trade.id, selectedEvent]);
+
+  const displayNarrative = storedNarrative || generatedNarrative;
 
   const handleGenerateNarrative = () => {
+    // If narrative already exists, show message and return
+    if (displayNarrative && !isGenerating) {
+      setShowAlreadyPresentMessage(true);
+      // Auto-close message after 2 seconds
+      setTimeout(() => {
+        setShowAlreadyPresentMessage(false);
+      }, 2000);
+      return;
+    }
+
     // Clear narrative but keep it in view during generation
     resetGeneration();
+    setShowAlreadyPresentMessage(false);
 
     if (selectedEvent) {
       const url = api.getEventNarrativeStreamUrl(
@@ -98,8 +156,6 @@ export const NarrativeSummary = ({
       startGeneration(url);
     }
   };
-
-  const displayNarrative = storedNarrative || generatedNarrative;
   const showEventContext =
     selectedEvent !== null && selectedEvent !== undefined;
 
@@ -149,8 +205,17 @@ export const NarrativeSummary = ({
         </Card>
       )}
 
-      {/* Show progress UI while generating or briefly after cache hit */}
-      {(isGenerating || (progress.length > 0 && !displayNarrative)) && (
+      {/* Show message if narrative already present and regenerate clicked */}
+      {showAlreadyPresentMessage && (
+        <Card className="p-4 border-blue-200 bg-blue-50 animate-in fade-in-50 duration-300">
+          <p className="text-blue-700 text-sm">
+            Narrative already present. Displaying existing summary...
+          </p>
+        </Card>
+      )}
+
+      {/* Show progress UI while generating */}
+      {isGenerating && (
         <NarrativeProgress
           progress={progress}
           isGenerating={isGenerating}
@@ -243,6 +308,36 @@ export const NarrativeSummary = ({
               </div>
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* Agent thinking process section - show stored logs */}
+      {displayNarrative && !isGenerating && storedLogs.length > 0 && (
+        <Card className="p-6 shadow-card">
+          <Collapsible open={isLogsOpen} onOpenChange={setIsLogsOpen}>
+            <CollapsibleTrigger className="flex items-center justify-between w-full">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Agent thinking process
+              </h3>
+              {isLogsOpen ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-2 max-h-96 overflow-y-auto font-mono text-sm mt-4">
+                {storedLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className="text-foreground/80 leading-relaxed"
+                  >
+                    {typeof log === "string" ? log : log.message || ""}
+                  </div>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </Card>
       )}
 

@@ -13,7 +13,10 @@ from agent.cache_manager import (
     get_event_narrative,
     save_trade_narrative,
     save_event_narrative,
-    generate_version_hash
+    generate_version_hash,
+    generate_cache_key,
+    save_narrative_logs,
+    get_narrative_logs
 )
 from providers.cdm_db.provider import get_trade_lineage
 
@@ -41,7 +44,7 @@ async def generate_trade_narrative_stream(trade_id: str):
             # Check if already cached
             yield sse_message("progress", {
                 "type": "cache_check",
-                "message": f"🔍 Checking if we already have a narrative for trade {trade_id}..."
+                "message": f"Checking if we already have a narrative for trade {trade_id}..."
             })
             
             cached = get_trade_narrative(trade_id)
@@ -49,7 +52,7 @@ async def generate_trade_narrative_stream(trade_id: str):
                 logger.info(f"Returning cached trade narrative for {trade_id}")
                 yield sse_message("progress", {
                     "type": "cache_hit",
-                    "message": f"✨ Great news! Found existing narrative from {cached['created_at'].strftime('%b %d, %Y at %I:%M %p')}",
+                    "message": f"Found existing narrative from {cached['created_at'].strftime('%b %d, %Y at %I:%M %p')}",
                     "timestamp": str(cached['created_at'])
                 })
                 yield sse_message("complete", {
@@ -64,19 +67,19 @@ async def generate_trade_narrative_stream(trade_id: str):
             
             yield sse_message("progress", {
                 "type": "cache_miss",
-                "message": f"📝 No existing narrative found. Let's create a fresh one!"
+                "message": "No existing narrative found. Creating a new one."
             })
             
             # Get timeline for version hash
             yield sse_message("progress", {
                 "type": "fetching_data",
-                "message": f"📊 Fetching complete trade timeline from database..."
+                "message": "Fetching complete trade timeline from database..."
             })
             timeline_data = await get_trade_lineage(trade_id)
             version_hash = generate_version_hash(timeline_data)
             yield sse_message("progress", {
                 "type": "data_ready",
-                "message": f"✅ Got timeline with {len(timeline_data.get('timeline', []))} events. Ready to generate!"
+                "message": f"Got timeline with {len(timeline_data.get('timeline', []))} events. Ready to generate."
             })
             
             # Generate narrative
@@ -101,14 +104,32 @@ async def generate_trade_narrative_stream(trade_id: str):
             # Save to permanent storage
             yield sse_message("progress", {
                 "type": "saving",
-                "message": "💾 Saving narrative to database so you won't need to wait next time..."
+                "message": "Saving narrative to database..."
             })
             
+            cache_key = generate_cache_key('trade', trade_id)
             save_trade_narrative(
                 trade_id=trade_id,
                 narrative_text=result['narrative'],
                 generation_metadata=result['metadata'],
                 version_hash=version_hash
+            )
+            
+            # Save all progress events as logs
+            all_logs = []
+            all_logs.append({"type": "cache_check", "message": "Checking if we already have a narrative..."})
+            all_logs.append({"type": "cache_miss", "message": "No existing narrative found. Creating a new one."})
+            all_logs.append({"type": "fetching_data", "message": "Fetching complete trade timeline from database..."})
+            all_logs.append({"type": "data_ready", "message": f"Got timeline with {len(timeline_data.get('timeline', []))} events. Ready to generate."})
+            all_logs.extend(progress_events)
+            all_logs.append({"type": "saving", "message": "Saving narrative to database..."})
+            all_logs.append({"type": "saved", "message": "Successfully saved. Future requests will be instant."})
+            
+            save_narrative_logs(
+                cache_key=cache_key,
+                narrative_type='trade',
+                trade_id=trade_id,
+                logs=all_logs
             )
             
             yield sse_message("progress", {
@@ -157,7 +178,7 @@ async def generate_event_narrative_stream(
             # Check if already cached
             yield sse_message("progress", {
                 "type": "cache_check",
-                "message": f"🔍 Checking if we already have a narrative for event {event_id}..."
+                "message": f"Checking if we already have a narrative for event {event_id}..."
             })
             
             cached = get_event_narrative(trade_id, event_id)
@@ -165,7 +186,7 @@ async def generate_event_narrative_stream(
                 logger.info(f"Returning cached event narrative for {trade_id}/{event_id}")
                 yield sse_message("progress", {
                     "type": "cache_hit",
-                    "message": f"✨ Great news! Found existing narrative from {cached['created_at'].strftime('%b %d, %Y at %I:%M %p')}",
+                    "message": f"Found existing narrative from {cached['created_at'].strftime('%b %d, %Y at %I:%M %p')}",
                     "timestamp": str(cached['created_at'])
                 })
                 yield sse_message("complete", {
@@ -180,20 +201,20 @@ async def generate_event_narrative_stream(
             
             yield sse_message("progress", {
                 "type": "cache_miss",
-                "message": f"📝 No existing narrative found. Let's create a fresh one!"
+                "message": "No existing narrative found. Creating a new one."
             })
             
             # Get event context for version hash
             yield sse_message("progress", {
                 "type": "fetching_data",
-                "message": f"📊 Fetching event context from database (state: {trade_state_id})..."
+                "message": f"Fetching event context from database (state: {trade_state_id})..."
             })
             from providers.cdm_db.provider import get_lineage
             event_context = await get_lineage(trade_state_id)
             version_hash = generate_version_hash(event_context)
             yield sse_message("progress", {
                 "type": "data_ready",
-                "message": f"✅ Event context loaded. Ready to generate!"
+                "message": "Event context loaded. Ready to generate."
             })
             
             # Generate narrative
@@ -219,15 +240,34 @@ async def generate_event_narrative_stream(
             # Save to storage
             yield sse_message("progress", {
                 "type": "saving",
-                "message": "💾 Saving event narrative to database so you won't need to wait next time..."
+                "message": "Saving event narrative to database..."
             })
             
+            cache_key = generate_cache_key('event', trade_id, event_id=event_id)
             save_event_narrative(
                 trade_id=trade_id,
                 event_id=event_id,
                 narrative_text=result['narrative'],
                 generation_metadata=result['metadata'],
                 version_hash=version_hash
+            )
+            
+            # Save all progress events as logs
+            all_logs = []
+            all_logs.append({"type": "cache_check", "message": f"Checking if we already have a narrative for event {event_id}..."})
+            all_logs.append({"type": "cache_miss", "message": "No existing narrative found. Creating a new one."})
+            all_logs.append({"type": "fetching_data", "message": f"Fetching event context from database (state: {trade_state_id})..."})
+            all_logs.append({"type": "data_ready", "message": "Event context loaded. Ready to generate."})
+            all_logs.extend(progress_events)
+            all_logs.append({"type": "saving", "message": "Saving event narrative to database..."})
+            all_logs.append({"type": "saved", "message": "Successfully saved. Future requests will be instant."})
+            
+            save_narrative_logs(
+                cache_key=cache_key,
+                narrative_type='event',
+                trade_id=trade_id,
+                logs=all_logs,
+                event_id=event_id
             )
             
             yield sse_message("progress", {
@@ -311,6 +351,38 @@ async def get_event_narrative_cached(trade_id: str, event_id: str):
     except Exception as e:
         logger.error(f"Error fetching event narrative: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/trades/{trade_id}/narrative/logs")
+async def get_trade_narrative_logs(trade_id: str):
+    """
+    Get log messages for a trade narrative
+    
+    Returns:
+        List of log messages from the generation process
+    """
+    try:
+        cache_key = generate_cache_key('trade', trade_id)
+        logs = get_narrative_logs(cache_key)
+        return {"logs": logs}
+    except Exception as e:
+        logger.error(f"Error fetching trade narrative logs: {str(e)}", exc_info=True)
+        return {"logs": []}
+
+@router.get("/trades/{trade_id}/events/{event_id}/narrative/logs")
+async def get_event_narrative_logs(trade_id: str, event_id: str):
+    """
+    Get log messages for an event narrative
+    
+    Returns:
+        List of log messages from the generation process
+    """
+    try:
+        cache_key = generate_cache_key('event', trade_id, event_id=event_id)
+        logs = get_narrative_logs(cache_key)
+        return {"logs": logs}
+    except Exception as e:
+        logger.error(f"Error fetching event narrative logs: {str(e)}", exc_info=True)
+        return {"logs": []}
 
 @router.delete("/trades/{trade_id}/narrative")
 async def invalidate_trade_narratives(trade_id: str):

@@ -147,10 +147,10 @@ async def generate_event_narrative(
             })
     
     try:
-        emit_progress("tool_discovery", message=f"🎯 Starting event narrative generation for {event_id}")
-        emit_progress("tool_discovery", message=f"📋 Setting up the narrative agent...")
-        emit_progress("tool_discovery", message=f"🔧 Available tools: get_lineage (event context), diff_states (compare changes), get_trade_lineage (full timeline)")
-        emit_progress("tool_discovery", message=f"✨ Ready to analyze this event!")
+        emit_progress("tool_discovery", message=f"Starting event narrative generation for {event_id}")
+        emit_progress("tool_discovery", message="Setting up the narrative agent...")
+        emit_progress("tool_discovery", message="Available tools: get_lineage (event context), diff_states (compare changes), get_trade_lineage (full timeline)")
+        emit_progress("tool_discovery", message="Ready to analyze this event.")
         
         # System prompt for event narratives
         system_prompt = f"""You are a financial trade analyst generating concise event narratives.
@@ -187,8 +187,8 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
         tool_call_count = 0
         
         while tool_call_count < MAX_TOOL_CALLS:
-            emit_progress("llm_generating", message=f"🤖 Consulting Azure OpenAI ({DEPLOYMENT_NAME})...", model=DEPLOYMENT_NAME)
-            emit_progress("llm_generating", message=f"💭 AI is analyzing the event data (budget: {MAX_EVENT_TOKENS} tokens)...")
+            emit_progress("llm_generating", message=f"Consulting Azure OpenAI ({DEPLOYMENT_NAME})...", model=DEPLOYMENT_NAME)
+            emit_progress("llm_generating", message=f"Analyzing event data (budget: {MAX_EVENT_TOKENS} tokens)...")
             
             response = await client.chat.completions.create(
                 model=DEPLOYMENT_NAME,
@@ -215,7 +215,7 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
                         "tool_call",
                         tool=tool_name,
                         args=tool_args,
-                        message=f"🔍 AI wants to learn more! Calling {tool_name} with args: {json.dumps(tool_args, indent=2)}"
+                        message=f"Calling {tool_name} with args: {json.dumps(tool_args, indent=2)}"
                     )
                     
                     # Call the actual MCP tool
@@ -232,7 +232,7 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
                             tool=tool_name,
                             result=truncated_result,
                             duration_ms=tool_duration,
-                            message=f"✅ Got data from {tool_name} (took {tool_duration:.0f}ms). AI is reviewing the information..."
+                            message=f"Got data from {tool_name} (took {tool_duration:.0f}ms). Reviewing the information..."
                         )
                         
                         # Add tool result to conversation
@@ -250,7 +250,7 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
                         })
                         
                     except Exception as e:
-                        error_msg = f"⚠️ Oops! Trouble calling {tool_name}: {str(e)}"
+                        error_msg = f"Error calling {tool_name}: {str(e)}"
                         emit_progress("error", message=error_msg)
                         messages.append({
                             "role": "tool",
@@ -260,7 +260,7 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
                 
                 # Check if we hit limit
                 if tool_call_count >= MAX_TOOL_CALLS:
-                    emit_progress("warning", message=f"🎯 Hit the tool call limit ({MAX_TOOL_CALLS} calls). AI is wrapping up with what it learned!")
+                    emit_progress("warning", message=f"Hit the tool call limit ({MAX_TOOL_CALLS} calls). Wrapping up with available data.")
                     break
             else:
                 # LLM generated final narrative
@@ -279,8 +279,8 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
                     "from_storage": False
                 }
                 
-                emit_progress("llm_generating", message=f"📝 AI has crafted the narrative! Used {response.usage.total_tokens} tokens in {total_time:.0f}ms")
-                emit_progress("complete", narrative=narrative_text, metadata=metadata, message=f"🎉 Event narrative complete!")
+                emit_progress("llm_generating", message=f"Narrative generated. Used {response.usage.total_tokens} tokens in {total_time:.0f}ms")
+                emit_progress("complete", narrative=narrative_text, metadata=metadata, message="Event narrative complete.")
                 
                 return {
                     "narrative": narrative_text,
@@ -291,7 +291,7 @@ Use the available tools to gather context, then write a clear 2-3 sentence expla
         raise Exception("Failed to generate narrative within tool call limit")
         
     except Exception as e:
-        emit_progress("error", message=f"❌ Error generating event narrative: {str(e)}")
+        emit_progress("error", message=f"Error generating event narrative: {str(e)}")
         raise
 
 async def generate_trade_narrative(
@@ -320,10 +320,10 @@ async def generate_trade_narrative(
             })
     
     try:
-        emit_progress("tool_discovery", message=f"🚀 Starting comprehensive trade narrative generation for {trade_id}")
-        emit_progress("tool_discovery", message=f"📊 Preparing to analyze the complete trade lifecycle...")
-        emit_progress("tool_discovery", message=f"🔧 Available tools: get_lineage (event context), diff_states (compare changes), get_trade_lineage (full timeline)")
-        emit_progress("tool_discovery", message=f"✨ Ready to tell this trade's story!")
+        emit_progress("tool_discovery", message=f"Starting comprehensive trade narrative generation for {trade_id}")
+        emit_progress("tool_discovery", message="Preparing to analyze the complete trade lifecycle...")
+        emit_progress("tool_discovery", message="Available tools: get_lineage (event context), diff_states (compare changes), get_trade_lineage (full timeline)")
+        emit_progress("tool_discovery", message="Ready to generate trade narrative.")
         
         system_prompt = f"""You are a financial trade analyst generating comprehensive trade narratives.
 
@@ -378,7 +378,7 @@ Use get_trade_lineage to understand the full lifecycle, then write a professiona
                     tool_args = json.loads(tool_call.function.arguments)
                     tool_call_count += 1
                     
-                    emit_progress("tool_call", tool=tool_name, args=tool_args, message=f"🔍 AI wants to learn more! Calling {tool_name} with args: {json.dumps(tool_args, indent=2)}")
+                    emit_progress("tool_call", tool=tool_name, args=tool_args, message=f"Calling {tool_name} with args: {json.dumps(tool_args, indent=2)}")
                     
                     tool_start = time.time()
                     try:
@@ -387,7 +387,7 @@ Use get_trade_lineage to understand the full lifecycle, then write a professiona
                         
                         truncated_result = truncate_result(tool_result)
                         
-                        emit_progress("tool_response", tool=tool_name, result=truncated_result, duration_ms=tool_duration, message=f"✅ Got data from {tool_name} (took {tool_duration:.0f}ms). AI is piecing together the story...")
+                        emit_progress("tool_response", tool=tool_name, result=truncated_result, duration_ms=tool_duration, message=f"Got data from {tool_name} (took {tool_duration:.0f}ms). Processing the information...")
                         
                         messages.append({
                             "role": "tool",
@@ -402,7 +402,7 @@ Use get_trade_lineage to understand the full lifecycle, then write a professiona
                         })
                         
                     except Exception as e:
-                        emit_progress("error", message=f"⚠️ Oops! Trouble calling {tool_name}: {str(e)}")
+                        emit_progress("error", message=f"Error calling {tool_name}: {str(e)}")
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tool_call.id,
@@ -410,7 +410,7 @@ Use get_trade_lineage to understand the full lifecycle, then write a professiona
                         })
                 
                 if tool_call_count >= MAX_TOOL_CALLS:
-                    emit_progress("warning", message=f"🎯 Hit the tool call limit ({MAX_TOOL_CALLS} calls). AI is wrapping up with what it learned!")
+                    emit_progress("warning", message=f"Hit the tool call limit ({MAX_TOOL_CALLS} calls). Wrapping up with available data.")
                     break
             else:
                 narrative_text = message.content
@@ -428,8 +428,8 @@ Use get_trade_lineage to understand the full lifecycle, then write a professiona
                     "from_storage": False
                 }
                 
-                emit_progress("llm_generating", message=f"📝 AI has crafted the comprehensive narrative! Used {response.usage.total_tokens} tokens in {total_time:.0f}ms")
-                emit_progress("complete", narrative=narrative_text, metadata=metadata, message=f"🎉 Trade narrative complete!")
+                emit_progress("llm_generating", message=f"Comprehensive narrative generated. Used {response.usage.total_tokens} tokens in {total_time:.0f}ms")
+                emit_progress("complete", narrative=narrative_text, metadata=metadata, message="Trade narrative complete.")
                 
                 return {
                     "narrative": narrative_text,
@@ -439,5 +439,5 @@ Use get_trade_lineage to understand the full lifecycle, then write a professiona
         raise Exception("Failed to generate narrative within tool call limit")
         
     except Exception as e:
-        emit_progress("error", message=f"❌ Error generating trade narrative: {str(e)}")
+        emit_progress("error", message=f"Error generating trade narrative: {str(e)}")
         raise

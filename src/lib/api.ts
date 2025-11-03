@@ -156,6 +156,24 @@ export const api = {
   },
 
   /**
+   * Get logs for a trade narrative
+   */
+  async getTradeNarrativeLogs(tradeId: string): Promise<{ logs: any[] }> {
+    return fetchApi<{ logs: any[] }>(
+      `/trades/${encodeURIComponent(tradeId)}/narrative/logs`
+    );
+  },
+
+  /**
+   * Get logs for an event narrative
+   */
+  async getEventNarrativeLogs(tradeId: string, eventId: string): Promise<{ logs: any[] }> {
+    return fetchApi<{ logs: any[] }>(
+      `/trades/${encodeURIComponent(tradeId)}/events/${encodeURIComponent(eventId)}/narrative/logs`
+    );
+  },
+
+  /**
    * Invalidate all narratives for a trade
    */
   async invalidateTradeNarratives(tradeId: string): Promise<{ deleted: number; trade_id: string }> {

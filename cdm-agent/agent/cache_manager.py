@@ -257,3 +257,98 @@ def save_event_narrative(
         event_id=event_id,
         version_hash=version_hash
     )
+
+def save_narrative_logs(
+    cache_key: str,
+    narrative_type: str,
+    trade_id: str,
+    logs: list,
+    event_id: Optional[str] = None
+) -> bool:
+    """
+    Save log messages for a narrative generation process
+    
+    Args:
+        cache_key: Cache key matching the narrative
+        narrative_type: 'trade' or 'event'
+        trade_id: Trade identifier
+        logs: List of log dictionaries with 'type', 'message', 'metadata'
+        event_id: Event identifier (for event narratives)
+    
+    Returns:
+        True if saved successfully
+    """
+    cnx = conn()
+    try:
+        # Delete existing logs for this cache_key first
+        execute(
+            cnx,
+            "DELETE FROM narrative_logs WHERE cache_key = %s",
+            (cache_key,)
+        )
+        
+        # Insert new logs
+        for index, log in enumerate(logs):
+            execute(
+                cnx,
+                """
+                INSERT INTO narrative_logs (
+                    cache_key,
+                    narrative_type,
+                    trade_id,
+                    event_id,
+                    log_index,
+                    log_type,
+                    message,
+                    metadata
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    cache_key,
+                    narrative_type,
+                    trade_id,
+                    event_id,
+                    index,
+                    log.get('type'),
+                    log.get('message', ''),
+                    json.dumps(log.get('metadata', {})) if log.get('metadata') else None
+                )
+            )
+        return True
+    finally:
+        cnx.close()
+
+def get_narrative_logs(cache_key: str) -> list:
+    """
+    Retrieve log messages for a narrative
+    
+    Args:
+        cache_key: Cache key matching the narrative
+    
+    Returns:
+        List of log dictionaries ordered by log_index
+    """
+    cnx = conn()
+    try:
+        results = q(
+            cnx,
+            """
+            SELECT log_index, log_type, message, metadata, timestamp
+            FROM narrative_logs
+            WHERE cache_key = %s
+            ORDER BY log_index ASC
+            """,
+            (cache_key,)
+        )
+        
+        logs = []
+        for row in results:
+            logs.append({
+                'type': row['log_type'],
+                'message': row['message'],
+                'metadata': row['metadata'] if row['metadata'] else {},
+                'timestamp': str(row['timestamp']) if row['timestamp'] else None
+            })
+        return logs
+    finally:
+        cnx.close()
