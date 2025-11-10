@@ -7,7 +7,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
-from agent.narrative_agent import generate_event_narrative, generate_trade_narrative
+from agent.narrative_agent import generate_event_narrative, generate_trade_narrative, call_mcp_tool
 from agent.cache_manager import (
     get_trade_narrative,
     get_event_narrative,
@@ -18,7 +18,6 @@ from agent.cache_manager import (
     save_narrative_logs,
     get_narrative_logs
 )
-from providers.cdm_db.provider import get_trade_lineage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -75,7 +74,7 @@ async def generate_trade_narrative_stream(trade_id: str):
                 "type": "fetching_data",
                 "message": "Fetching complete trade timeline from database..."
             })
-            timeline_data = await get_trade_lineage(trade_id)
+            timeline_data = await call_mcp_tool("get_trade_lineage", {"trade_id": trade_id})
             version_hash = generate_version_hash(timeline_data)
             yield sse_message("progress", {
                 "type": "data_ready",
@@ -209,8 +208,7 @@ async def generate_event_narrative_stream(
                 "type": "fetching_data",
                 "message": f"Fetching event context from database (state: {trade_state_id})..."
             })
-            from providers.cdm_db.provider import get_lineage
-            event_context = await get_lineage(trade_state_id)
+            event_context = await call_mcp_tool("get_lineage", {"trade_state_id": trade_state_id})
             version_hash = generate_version_hash(event_context)
             yield sse_message("progress", {
                 "type": "data_ready",

@@ -4,12 +4,20 @@ Read-only MCP server for querying CDM trade states and business events
 """
 import asyncio
 import os
+import sys
+from pathlib import Path
 from typing import Annotated, Dict, Any, List
+
+# Add parent directory to path for imports when running as MCP server
+if __name__ == "__main__":
+    parent_dir = Path(__file__).parent.parent.parent
+    if str(parent_dir) not in sys.path:
+        sys.path.insert(0, str(parent_dir))
 
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import Tool
+    from mcp.types import Tool, TextContent
     MCP_ENABLED = True
 except ImportError:
     # Allow importing this module without the optional MCP dependencies installed.
@@ -21,10 +29,16 @@ from common.db import conn, q, one
 from common.diff import notional, fixed_rate, changed, appended
 
 cnx = conn()
-server = Server("cdm-db") if MCP_ENABLED else None
 
-if MCP_ENABLED and server is not None:
-    @server.list_tools()
+# Create server instance
+def create_server():
+    """Create and configure the MCP server"""
+    if not MCP_ENABLED:
+        return None
+    
+    s = Server("cdm-db")
+    
+    @s.list_tools()
     async def list_tools() -> List[Tool]:
         """List available tools"""
         return [
@@ -117,36 +131,35 @@ if MCP_ENABLED and server is not None:
                 }
             )
         ]
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    
+    @s.call_tool()
+    async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         """Handle tool calls"""
+        import json
+        
+        result = None
         if name == "get_trade_states":
-            return await get_trade_states(arguments["trade_id"])
+            result = await get_trade_states(arguments["trade_id"])
         elif name == "get_lineage":
-            return await get_lineage(arguments["trade_state_id"])
+            result = await get_lineage(arguments["trade_state_id"])
         elif name == "get_tradestate_payload":
-            return await get_tradestate_payload(arguments["trade_state_id"])
+            result = await get_tradestate_payload(arguments["trade_state_id"])
         elif name == "get_business_event":
-            return await get_business_event(arguments["event_id"])
+            result = await get_business_event(arguments["event_id"])
         elif name == "diff_states":
-            return await diff_states(arguments["from_state_id"], arguments["to_state_id"])
+            result = await diff_states(arguments["from_state_id"], arguments["to_state_id"])
         elif name == "get_trade_lineage":
-            return await get_trade_lineage(arguments["trade_id"])
+            result = await get_trade_lineage(arguments["trade_id"])
         else:
             raise ValueError(f"Unknown tool: {name}")
-else:
-    async def list_tools() -> List[Any]:
-        """Fallback implementation when MCP support is unavailable."""
-        raise RuntimeError(
-            "MCP tooling is unavailable because the optional `mcp` package is not installed."
-        )
+        
+        # Return as TextContent
+        return [TextContent(type="text", text=json.dumps(result, cls=DateTimeEncoder))]
+    
+    return s
 
-    async def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Fallback implementation when MCP support is unavailable."""
-        raise RuntimeError(
-            "MCP tooling is unavailable because the optional `mcp` package is not installed."
-        )
+# Create the server instance
+server = create_server() if MCP_ENABLED else None
 
 async def get_trade_states(trade_id: str) -> Dict[str, Any]:
     """Get all states for a trade ordered by version"""
@@ -264,14 +277,7 @@ def _map_intent_to_event_type(intent: str = None, position_state: str = None) ->
     return position_mapping.get(position_state, position_state or "Unknown")
 
 async def get_trade_lineage(trade_id: str) -> Dict[str, Any]:
-    """Get complete timeline lineage for a trade with enriched event data
-    
-    Returns all states for a trade with enriched information including:
-    - Intent and effectiveDate from BusinessEvent
-    - Before/after relationships
-    - Event type mapping for UI display
-    - Chronologically ordered timeline
-    """
+    """Get complete timeline lineage for a trade with enriched event data"""
     # Get all states for the trade
     states_result = await get_trade_states(trade_id)
     
@@ -340,11 +346,216 @@ async def get_trade_lineage(trade_id: str) -> Dict[str, Any]:
     }
 
 async def main():
-    """Run the MCP server"""
-    if not MCP_ENABLED or server is None or stdio_server is None:
-        raise RuntimeError("Cannot start MCP server because the optional `mcp` dependency is not installed.")
-    async with stdio_server(server).run():
-        await asyncio.Event().wait()
+    """Run a simple MCP-compatible JSON-RPC server via stdio"""
+    if not MCP_ENABLED:
+        raise RuntimeError("MCP not enabled")
+
+    # Implement simple MCP JSON-RPC over stdio
+    import json
+    import sys
+    import asyncio
+
+    # Custom JSON encoder to handle datetime objects
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if hasattr(obj, 'isoformat'):  # datetime/date objects
+                return obj.isoformat()
+            return super().default(obj)
+
+    async def read_message():
+        """Read a JSON-RPC message from stdin"""
+        for line in sys.stdin:
+            line = line.strip()
+            if line:
+                try:
+                    return json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+        return None
+
+    async def write_message(msg):
+        """Write a JSON-RPC message to stdout"""
+        print(json.dumps(msg), flush=True)
+
+    # Main MCP protocol loop
+    while True:
+        try:
+            # Read incoming message
+            message = await asyncio.get_event_loop().run_in_executor(None, lambda: input().strip() if sys.stdin.isatty() else sys.stdin.readline().strip())
+            if not message:
+                continue
+
+            try:
+                request = json.loads(message)
+            except json.JSONDecodeError:
+                continue
+
+            # Handle MCP protocol messages
+            if request.get("method") == "initialize":
+                # Respond to initialize request
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {
+                            "tools": {}
+                        },
+                        "serverInfo": {
+                            "name": "cdm-db",
+                            "version": "1.0.0"
+                        }
+                    }
+                }
+                await asyncio.get_event_loop().run_in_executor(None, lambda: print(json.dumps(response, cls=DateTimeEncoder), flush=True))
+
+            elif request.get("method") == "tools/list":
+                # List available tools
+                tools = [
+                    {
+                        "name": "get_trade_states",
+                        "description": "Get all states for a trade ordered by version",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "trade_id": {
+                                    "type": "string",
+                                    "description": "logical trade id"
+                                }
+                            },
+                            "required": ["trade_id"]
+                        }
+                    },
+                    {
+                        "name": "get_lineage",
+                        "description": "Get before/after relationships, intent, and effective date for a trade state",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "trade_state_id": {
+                                    "type": "string",
+                                    "description": "state id"
+                                }
+                            },
+                            "required": ["trade_state_id"]
+                        }
+                    },
+                    {
+                        "name": "get_tradestate_payload",
+                        "description": "Get full TradeState JSON payload",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "trade_state_id": {
+                                    "type": "string",
+                                    "description": "state id"
+                                }
+                            },
+                            "required": ["trade_state_id"]
+                        }
+                    },
+                    {
+                        "name": "get_business_event",
+                        "description": "Get full BusinessEvent JSON payload",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "event_id": {
+                                    "type": "string",
+                                    "description": "event id"
+                                }
+                            },
+                            "required": ["event_id"]
+                        }
+                    },
+                    {
+                        "name": "diff_states",
+                        "description": "Compare two trade states showing changes and appends",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "from_state_id": {
+                                    "type": "string",
+                                    "description": "from"
+                                },
+                                "to_state_id": {
+                                    "type": "string",
+                                    "description": "to"
+                                }
+                            },
+                            "required": ["from_state_id", "to_state_id"]
+                        }
+                    },
+                    {
+                        "name": "get_trade_lineage",
+                        "description": "Get complete timeline lineage for a trade with enriched event data (intent, effectiveDate, relationships) - optimized for UI timeline views",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "trade_id": {
+                                    "type": "string",
+                                    "description": "logical trade id"
+                                }
+                            },
+                            "required": ["trade_id"]
+                        }
+                    }
+                ]
+
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "result": {"tools": tools}
+                }
+                await asyncio.get_event_loop().run_in_executor(None, lambda: print(json.dumps(response, cls=DateTimeEncoder), flush=True))
+
+            elif request.get("method") == "tools/call":
+                # Handle tool calls
+                tool_name = request.get("params", {}).get("name")
+                tool_args = request.get("params", {}).get("arguments", {})
+
+                result = None
+                try:
+                    if tool_name == "get_trade_states":
+                        result = await get_trade_states(tool_args["trade_id"])
+                    elif tool_name == "get_lineage":
+                        result = await get_lineage(tool_args["trade_state_id"])
+                    elif tool_name == "get_tradestate_payload":
+                        result = await get_tradestate_payload(tool_args["trade_state_id"])
+                    elif tool_name == "get_business_event":
+                        result = await get_business_event(tool_args["event_id"])
+                    elif tool_name == "diff_states":
+                        result = await diff_states(tool_args["from_state_id"], tool_args["to_state_id"])
+                    elif tool_name == "get_trade_lineage":
+                        result = await get_trade_lineage(tool_args["trade_id"])
+                    else:
+                        raise ValueError(f"Unknown tool: {tool_name}")
+
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "result": {"content": [{"type": "text", "text": json.dumps(result, cls=DateTimeEncoder)}]}
+                    }
+
+                except Exception as e:
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "error": {"code": -32000, "message": str(e)}
+                    }
+
+                await asyncio.get_event_loop().run_in_executor(None, lambda: print(json.dumps(response, cls=DateTimeEncoder), flush=True))
+
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            # Send error response
+            error_response = {
+                "jsonrpc": "2.0",
+                "id": request.get("id") if 'request' in locals() else None,
+                "error": {"code": -32603, "message": f"Internal error: {str(e)}"}
+            }
+            await asyncio.get_event_loop().run_in_executor(None, lambda: print(json.dumps(error_response, cls=DateTimeEncoder), flush=True))
 
 if __name__ == "__main__":
     asyncio.run(main())

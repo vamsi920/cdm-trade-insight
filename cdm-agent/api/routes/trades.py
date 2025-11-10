@@ -4,12 +4,7 @@ Trade-related API routes
 import logging
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional, Dict, Any
-from providers.cdm_db.provider import (
-    get_trade_lineage,
-    get_trade_states,
-    get_tradestate_payload,
-    get_business_event
-)
+from agent.narrative_agent import call_mcp_tool
 from common.db import conn, q, one
 from common.transform import (
     transform_to_trade,
@@ -45,7 +40,7 @@ async def list_trades():
             trade_id = row["trade_id"]
             try:
                 # Get timeline to get latest state
-                timeline = await get_trade_lineage(trade_id)
+                timeline = await call_mcp_tool("get_trade_lineage", {"trade_id": trade_id})
                 
                 if not timeline.get("timeline"):
                     logger.warning(f"Trade {trade_id} has no timeline entries")
@@ -53,7 +48,7 @@ async def list_trades():
                 
                 # Get latest trade state payload
                 latest_state_id = timeline["timeline"][-1]["trade_state_id"]
-                latest_payload = await get_tradestate_payload(latest_state_id)
+                latest_payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": latest_state_id})
                 
                 # Extract summary fields
                 product_type = extract_product_type(latest_payload)
@@ -135,13 +130,13 @@ async def search_trades(
             trade_id = row["trade_id"]
             try:
                 # Get basic info for summary
-                timeline = await get_trade_lineage(trade_id)
+                timeline = await call_mcp_tool("get_trade_lineage", {"trade_id": trade_id})
                 
                 if not timeline.get("timeline"):
                     continue
                 
                 latest_state_id = timeline["timeline"][-1]["trade_state_id"]
-                latest_payload = await get_tradestate_payload(latest_state_id)
+                latest_payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": latest_state_id})
                 
                 product_type = extract_product_type(latest_payload)
                 notional_val = extract_notional(latest_payload) or 0.0
@@ -195,7 +190,7 @@ async def get_trade(trade_id: str):
     """Get full trade details with events"""
     try:
         # Get timeline data
-        timeline_data = await get_trade_lineage(trade_id)
+        timeline_data = await call_mcp_tool("get_trade_lineage", {"trade_id": trade_id})
         
         if not timeline_data.get("timeline"):
             raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
@@ -205,14 +200,14 @@ async def get_trade(trade_id: str):
         for entry in timeline_data["timeline"]:
             trade_state_id = entry.get("trade_state_id")
             try:
-                payload = await get_tradestate_payload(trade_state_id)
+                payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": trade_state_id})
                 trade_state_payloads[trade_state_id] = payload
             except Exception:
                 continue
         
         # Get latest trade state payload
         latest_state_id = timeline_data["timeline"][-1]["trade_state_id"]
-        latest_payload = await get_tradestate_payload(latest_state_id)
+        latest_payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": latest_state_id})
         
         # Transform to Trade format
         trade = transform_to_trade(
@@ -233,7 +228,7 @@ async def get_trade(trade_id: str):
 async def get_trade_timeline(trade_id: str):
     """Get trade timeline/events only"""
     try:
-        timeline_data = await get_trade_lineage(trade_id)
+        timeline_data = await call_mcp_tool("get_trade_lineage", {"trade_id": trade_id})
         
         if not timeline_data.get("timeline"):
             raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
@@ -243,7 +238,7 @@ async def get_trade_timeline(trade_id: str):
         for entry in timeline_data["timeline"]:
             trade_state_id = entry.get("trade_state_id")
             try:
-                payload = await get_tradestate_payload(trade_state_id)
+                payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": trade_state_id})
                 trade_state_payloads[trade_state_id] = payload
             except Exception:
                 continue
@@ -261,7 +256,7 @@ async def get_trade_timeline(trade_id: str):
 async def get_trade_state(trade_id: str, trade_state_id: str):
     """Get specific trade state payload (for CDM Output tab)"""
     try:
-        payload = await get_tradestate_payload(trade_state_id)
+        payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": trade_state_id})
         return {"payload": payload}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -311,7 +306,7 @@ async def debug_trade_detail(trade_id: str):
     try:
         # Step 1: Get trade states
         debug_info["steps"].append("Step 1: Getting trade states")
-        states_result = await get_trade_states(trade_id)
+        states_result = await call_mcp_tool("get_trade_states", {"trade_id": trade_id})
         debug_info["states_count"] = len(states_result.get("states", []))
         debug_info["states"] = states_result.get("states", [])
         
@@ -321,7 +316,7 @@ async def debug_trade_detail(trade_id: str):
         
         # Step 2: Get timeline
         debug_info["steps"].append("Step 2: Getting timeline")
-        timeline = await get_trade_lineage(trade_id)
+        timeline = await call_mcp_tool("get_trade_lineage", {"trade_id": trade_id})
         debug_info["timeline_count"] = len(timeline.get("timeline", []))
         debug_info["timeline"] = timeline.get("timeline", [])
         
@@ -335,7 +330,7 @@ async def debug_trade_detail(trade_id: str):
         debug_info["latest_state_id"] = latest_state_id
         
         try:
-            latest_payload = await get_tradestate_payload(latest_state_id)
+            latest_payload = await call_mcp_tool("get_tradestate_payload", {"trade_state_id": latest_state_id})
             debug_info["payload_keys"] = list(latest_payload.keys()) if isinstance(latest_payload, dict) else "Not a dict"
             debug_info["payload_sample"] = str(latest_payload)[:500] if latest_payload else None
             
