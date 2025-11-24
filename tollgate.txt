@@ -1,0 +1,45 @@
+graph TB
+    User[👤 Business User<br/>Operations/Audit/Compliance]
+    UI[🖥️ Web Interface<br/>Trade Dashboard]
+    API[⚡ API Server<br/>Request Handler]
+    Cache{💾 Narrative Cache<br/>Already Generated?}
+    MCP[🔧 MCP Architecture<br/>Tool Orchestration]
+    Tools[🛠️ Data Access Tools<br/>Trade Queries & Analysis]
+    DB[(📊 PostgreSQL Database<br/>CDM Trade Data)]
+    LLM[🤖 Large Language Model<br/>AI Narrative Generation]
+    Stream[📡 Live Progress Stream<br/>Real-time Updates]
+    SaveCache[💾 Save to Cache<br/>For Future Use]
+    
+    User -->|1. Request narrative for<br/>trade or event| UI
+    UI -->|2. Send request| API
+    API -->|3. Check cache| Cache
+    
+    Cache -->|Found: Return instantly| UI
+    Cache -->|Not found: Generate new| MCP
+    
+    MCP -->|4. Discover & prepare<br/>available tools| Tools
+    Tools -->|5. Query trade data,<br/>lineage & events| DB
+    DB -->|6. Return CDM data| Tools
+    
+    Tools -->|7. Provide data context| LLM
+    MCP -->|8. Orchestrate analysis| LLM
+    
+    LLM -->|9. Generate narrative<br/>with reasoning| MCP
+    MCP -->|10. Stream progress| Stream
+    Stream -->|11. Show live updates| UI
+    
+    MCP -->|12. Final narrative| SaveCache
+    SaveCache -->|13. Store for reuse| DB
+    SaveCache -->|14. Deliver result| UI
+    UI -->|15. Display plain-English<br/>explanation| User
+    
+    style User fill:#e8f4f8
+    style UI fill:#e8f4f8
+    style API fill:#f0f0f0
+    style Cache fill:#fff4e6
+    style MCP fill:#f0f0f0
+    style Tools fill:#f0f0f0
+    style DB fill:#e6f3ff
+    style LLM fill:#f5f0ff
+    style Stream fill:#e8f4f8
+    style SaveCache fill:#fff4e6
