@@ -611,3 +611,4 @@ GROUP BY object_type, trade_id;
 -- Expected: BusinessEvent/TradeState pairs for each state
 ```
 
+
